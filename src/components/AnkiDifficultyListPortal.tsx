@@ -54,7 +54,7 @@ function pickDifficult(rows: DifficultyRow[]) {
 
   return rows.filter((row) => {
     const repeatedAgain = row.again >= 2
-    const consistentlyHard = row.recentCount >= 3 && row.recentErrorRate >= 0.38
+    const consistentlyHard = row.recentCount >= 2 && row.recentErrorRate >= 0.45
     const repeatedRelearning = row.card.reps >= 5 && row.card.lapses >= 2 && row.lapseRate >= 0.12
     const relativeOutlier = row.recentCount >= 3 && row.score >= relativeFloor && row.score >= 0.24
     return repeatedAgain || consistentlyHard || repeatedRelearning || relativeOutlier
