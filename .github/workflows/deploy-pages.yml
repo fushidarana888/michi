@@ -1,5 +1,6 @@
 name: Build Michi site
 
+# Queue nudge: 2026-10-05 23:10 MSK
 on:
   push:
     branches: [main]
