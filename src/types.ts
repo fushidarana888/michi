@@ -1,5 +1,7 @@
 export type Tier = 'minimum' | 'normal' | 'boost'
 export type TaskStatus = 'planned' | 'in_progress' | 'done' | 'skipped'
+export type LearningStatus = 'not_started' | 'learning' | 'assisted' | 'independent' | 'solid'
+export type LearningPhase = 'foundation' | 'tools' | 'exam_tasks' | 'mixed' | 'mock'
 
 export interface Profile {
   id: string
@@ -21,6 +23,9 @@ export interface Subject {
   icon: string | null
   sort_order: number
   is_active: boolean
+  attention_weight: number
+  recommended_gap_days: number
+  learning_phase: LearningPhase
 }
 
 export interface Topic {
@@ -45,6 +50,53 @@ export interface Goal {
   target_date: string | null
   status: 'active' | 'paused' | 'completed'
   progress: number
+}
+
+export interface LearningNode {
+  id: string
+  user_id: string
+  subject_id: string
+  title: string
+  description: string | null
+  node_kind: 'foundation' | 'tool' | 'exam_task' | 'practice' | 'checkpoint'
+  sort_order: number
+  status: LearningStatus
+  importance: number
+}
+
+export interface StudyLog {
+  id: string
+  user_id: string
+  subject_id: string
+  learning_node_id: string | null
+  minutes: number
+  activity_kind: 'theory' | 'practice' | 'review' | 'test' | 'lesson' | 'other'
+  perceived_difficulty: number | null
+  note: string | null
+  occurred_at: string
+  source: 'manual' | 'task' | 'ai'
+}
+
+export interface SavingsGoal {
+  id: string
+  user_id: string
+  title: string
+  target_amount_jpy: number
+  target_date: string | null
+  reference_rub_per_jpy: number | null
+  is_active: boolean
+}
+
+export interface SavingsTransaction {
+  id: string
+  user_id: string
+  savings_goal_id: string
+  received_amount_rub: number | null
+  saved_amount_rub: number
+  source: string | null
+  note: string | null
+  occurred_on: string
+  created_at: string
 }
 
 export interface DailyPlan {
