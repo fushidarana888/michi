@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './AppV2'
 import { AnkiConnectionHelpPortal } from './components/AnkiConnectionHelpPortal'
+import { AnkiDifficultyListPortal } from './components/AnkiDifficultyListPortal'
 import { AnkiIntegrationPortal } from './components/AnkiIntegrationPortal'
 import { RouteSelectionPortal } from './components/RouteSelectionPortal'
 import { StudyPartSelectorPortal } from './components/StudyPartSelectorPortal'
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')!).render(
       <StudyPartSelectorPortal />
       <RouteSelectionPortal />
       <AnkiIntegrationPortal />
+      <AnkiDifficultyListPortal />
       <AnkiConnectionHelpPortal />
     </HashRouter>
   </StrictMode>,
