@@ -1,0 +1,46 @@
+.route-selection-managed .phase-badge {
+  display: none;
+}
+
+.route-study-selector {
+  min-width: min(420px, 100%);
+  margin-left: auto;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  display: grid;
+  gap: 7px;
+}
+
+.route-study-selector-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.route-study-selector select {
+  width: 100%;
+}
+
+.route-study-selector small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.learning-node.michi-selected-node {
+  outline: 1px solid rgba(168, 240, 208, .36);
+  background: rgba(168, 240, 208, .045);
+}
+
+@media (max-width: 760px) {
+  .route-study-selector {
+    min-width: 100%;
+    margin-left: 0;
+  }
+}
