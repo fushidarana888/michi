@@ -1,0 +1,121 @@
+.study-part-selector {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  display: grid;
+  gap: 12px;
+}
+
+.study-part-selector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.study-part-selector-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.study-part-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  color: var(--accent);
+}
+
+.study-part-selector-head strong {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.study-part-status {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.study-part-controls {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: end;
+}
+
+.study-part-controls label {
+  display: grid;
+  gap: 6px;
+}
+
+.study-part-controls label > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.study-part-controls select {
+  width: 100%;
+}
+
+.study-part-arrow {
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.study-part-arrow:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.study-part-description {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.study-part-description svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.study-part-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.recommendation-body-v2 > div:first-child > .recommendation-action,
+.recommendation-body-v2 > div:first-child > .node-description,
+.recommendation-meta > span:nth-child(2) {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .study-part-selector {
+    padding: 13px;
+  }
+
+  .study-part-selector-head {
+    display: grid;
+  }
+
+  .study-part-status {
+    justify-self: start;
+  }
+}
