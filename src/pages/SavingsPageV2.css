@@ -1,0 +1,283 @@
+.savings-v2 {
+  gap: 16px;
+}
+
+.savings-v2 .savings-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.savings-v2 .savings-hero > div {
+  display: grid;
+  gap: 6px;
+  min-height: 128px;
+  align-content: center;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.savings-v2 .savings-hero span,
+.savings-v2 .savings-hero small {
+  color: var(--muted);
+}
+
+.savings-v2 .savings-hero span {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.savings-v2 .savings-hero strong {
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  letter-spacing: -0.04em;
+}
+
+.savings-v2 .savings-hero small {
+  line-height: 1.4;
+}
+
+.savings-v2 .free-money strong {
+  color: var(--accent);
+}
+
+.savings-v2 .protected-money strong {
+  color: var(--warning);
+}
+
+.savings-advice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  padding: 20px;
+  border-color: rgba(168, 240, 208, 0.18);
+}
+
+.savings-advice.state-recovering {
+  border-color: rgba(242, 207, 126, 0.34);
+  background: linear-gradient(180deg, rgba(58, 48, 29, 0.35), rgba(24, 25, 28, 0.96));
+}
+
+.advice-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.state-recovering .advice-icon {
+  background: rgba(242, 207, 126, 0.1);
+  color: var(--warning);
+}
+
+.savings-advice h2 {
+  margin-bottom: 5px;
+}
+
+.savings-advice p:not(.eyebrow) {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.next-income-advice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 11px 12px;
+  font-size: 0.84rem;
+}
+
+.next-income-advice svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.next-income-advice span {
+  flex: 1;
+}
+
+.next-income-advice button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(168, 240, 208, 0.25);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  padding: 7px 10px;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.floor-explainer {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.35fr) 1fr;
+  gap: 14px 22px;
+  padding: 18px;
+}
+
+.floor-explainer > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.floor-explainer > div:first-child span,
+.floor-explainer small,
+.floor-explainer p {
+  color: var(--muted);
+}
+
+.floor-explainer > div:first-child strong {
+  font-size: 1.25rem;
+}
+
+.floor-explainer p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.floor-line-visual {
+  display: grid;
+  gap: 7px;
+  align-content: center;
+}
+
+.floor-track {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #0e1218;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.floor-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7ed9b4, #a8f0d0);
+}
+
+.savings-v2 .savings-form,
+.savings-v2 .withdrawal-form,
+.savings-v2 .savings-settings {
+  padding: 19px;
+}
+
+.savings-v2 .savings-form,
+.savings-v2 .withdrawal-form {
+  display: grid;
+  gap: 14px;
+}
+
+.quick-money-row .recommended {
+  border-color: rgba(168, 240, 208, 0.3);
+  color: var(--accent);
+}
+
+.withdrawal-form .section-heading > svg {
+  color: var(--muted);
+}
+
+.withdrawal-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border-radius: 14px;
+  padding: 11px 12px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.withdrawal-preview svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.withdrawal-preview.safe {
+  border: 1px solid rgba(168, 240, 208, 0.22);
+  background: var(--accent-soft);
+  color: #cdeedd;
+}
+
+.withdrawal-preview.danger {
+  border: 1px solid rgba(255, 143, 156, 0.28);
+  background: rgba(255, 143, 156, 0.07);
+  color: #f0c3ca;
+}
+
+.protected-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid rgba(255, 143, 156, 0.2);
+  border-radius: 13px;
+  padding: 11px;
+}
+
+.protected-confirm input {
+  width: auto;
+  margin: 2px 0 0;
+  accent-color: var(--danger);
+}
+
+.protected-confirm span {
+  margin: 0;
+  color: #e4c6cb;
+}
+
+.savings-settings summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.savings-settings[open] summary {
+  margin-bottom: 13px;
+}
+
+.savings-settings > p {
+  font-size: 0.84rem;
+}
+
+.savings-loading {
+  display: flex;
+  min-height: 45vh;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .savings-v2 .savings-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .savings-v2 .savings-hero > div {
+    min-height: auto;
+  }
+
+  .floor-explainer {
+    grid-template-columns: 1fr;
+  }
+
+  .floor-explainer p {
+    grid-column: auto;
+  }
+
+  .next-income-advice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .next-income-advice button {
+    margin-left: 26px;
+  }
+}
