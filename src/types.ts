@@ -102,6 +102,21 @@ export interface SavingsTransaction {
   created_at: string
 }
 
+export interface SavingsAdvice {
+  currentBalance: number
+  peakBalance: number
+  automaticFloor: number
+  effectiveFloor: number
+  freeToSpend: number
+  reserveGap: number
+  recentSaveRatio: number | null
+  recommendedSaveRatio: number
+  recommendedFromNextIncome: number
+  state: 'building' | 'protected' | 'recovering'
+  headline: string
+  detail: string
+}
+
 export interface DailyPlan {
   id: string
   user_id: string
