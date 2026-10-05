@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './AppV2'
+import { AnkiIntegrationPortal } from './components/AnkiIntegrationPortal'
 import { StudyPartSelectorPortal } from './components/StudyPartSelectorPortal'
 import './styles.css'
 
@@ -10,6 +11,7 @@ createRoot(document.getElementById('root')!).render(
     <HashRouter>
       <App />
       <StudyPartSelectorPortal />
+      <AnkiIntegrationPortal />
     </HashRouter>
   </StrictMode>,
 )
