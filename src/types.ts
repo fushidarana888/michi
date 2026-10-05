@@ -87,6 +87,9 @@ export interface SavingsGoal {
   protected_floor_rub: number
   auto_floor_ratio: number
   base_save_ratio: number
+  weekly_floor_rub: number
+  weekly_floor_increment_rub: number
+  weekly_floor_last_bump_on: string
   is_active: boolean
 }
 
@@ -106,7 +109,9 @@ export interface SavingsAdvice {
   currentBalance: number
   peakBalance: number
   automaticFloor: number
+  weeklyFloor: number
   effectiveFloor: number
+  floorSource: 'manual' | 'weekly' | 'peak' | 'none'
   freeToSpend: number
   reserveGap: number
   recentSaveRatio: number | null
