@@ -1,0 +1,140 @@
+.anki-hardest.michi-adaptive-hard-list {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+
+.anki-hardest.michi-adaptive-hard-list > svg,
+.anki-hardest.michi-adaptive-hard-list > div:not(.anki-adaptive-root) {
+  display: none;
+}
+
+.anki-adaptive-root {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+}
+
+.anki-adaptive-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.anki-adaptive-title > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.anki-adaptive-title span,
+.anki-adaptive-title strong,
+.anki-adaptive-title small {
+  display: block;
+}
+
+.anki-adaptive-title span,
+.anki-adaptive-title small {
+  color: var(--muted);
+}
+
+.anki-adaptive-title strong {
+  margin: 3px 0;
+}
+
+.anki-adaptive-title small {
+  line-height: 1.45;
+}
+
+.anki-adaptive-list {
+  display: grid;
+  gap: 8px;
+}
+
+.anki-adaptive-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(260px, 1.85fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 184, 108, .18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .018);
+}
+
+.anki-adaptive-word {
+  min-width: 0;
+}
+
+.anki-adaptive-word strong,
+.anki-adaptive-word span {
+  display: block;
+}
+
+.anki-adaptive-word strong {
+  font-size: .94rem;
+}
+
+.anki-adaptive-word span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anki-adaptive-signals {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.anki-adaptive-signals > span {
+  padding: 5px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .7rem;
+  white-space: nowrap;
+}
+
+.anki-adaptive-signals b {
+  color: var(--text);
+}
+
+.anki-severity {
+  color: #ffd7a6 !important;
+  border-color: rgba(255, 184, 108, .3) !important;
+  background: rgba(255, 184, 108, .07);
+}
+
+.anki-severity.severity-очень-тяжело {
+  color: #ffb8a8 !important;
+  border-color: rgba(255, 137, 112, .35) !important;
+  background: rgba(255, 137, 112, .08);
+}
+
+.anki-lapse-help {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 184, 108, .16);
+  color: var(--muted);
+  font-size: .75rem;
+  line-height: 1.5;
+}
+
+.anki-lapse-help strong {
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .anki-adaptive-item {
+    grid-template-columns: 1fr;
+  }
+
+  .anki-adaptive-signals {
+    justify-content: flex-start;
+  }
+}
