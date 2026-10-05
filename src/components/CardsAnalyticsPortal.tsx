@@ -17,6 +17,8 @@ export function CardsAnalyticsPortal() {
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user.id || null))
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUserId(session?.user.id || null))
+    return () => data.subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
