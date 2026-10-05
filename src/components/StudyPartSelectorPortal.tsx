@@ -73,10 +73,23 @@ export function StudyPartSelectorPortal() {
   const selectedNode = subjectNodes.find((node) => node.id === selectedNodeId) || null
   const selectedIndex = selectedNode ? subjectNodes.findIndex((node) => node.id === selectedNode.id) : -1
 
+  function syncVisibleLabels(node: LearningNode) {
+    if (!subjectId) return
+    const subject = subjects.find((item) => item.id === subjectId)
+    if (!subject) return
+
+    const attentionCards = [...document.querySelectorAll<HTMLElement>('.attention-card')]
+    const card = attentionCards.find((item) => (item.querySelector('.attention-title strong')?.textContent || '').includes(subject.name))
+    const nextNode = card?.querySelector<HTMLElement>('.next-node strong')
+    if (nextNode) nextNode.textContent = node.title
+  }
+
   function choose(nodeId: string) {
     if (!subjectId) return
+    const node = subjectNodes.find((item) => item.id === nodeId)
     setPreferredNode(subjectId, nodeId)
     setSelectedNodeId(nodeId)
+    if (node) syncVisibleLabels(node)
   }
 
   function move(delta: number) {
@@ -117,7 +130,7 @@ export function StudyPartSelectorPortal() {
       {selectedNode.description && (
         <p className="study-part-description"><BookOpen size={17} /> {selectedNode.description}</p>
       )}
-      <p className="study-part-note">Michi сам предлагает первый незакреплённый пункт, но здесь можно выбрать любой номер, который хочешь разобрать сегодня.</p>
+      <p className="study-part-note">Выбранный пункт общий для «Куда дальше» и «Маршрута». Michi предлагает первый незакреплённый, но ты можешь в любой момент выбрать другой.</p>
     </div>,
     target,
   )
