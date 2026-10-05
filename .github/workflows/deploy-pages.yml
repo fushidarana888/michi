@@ -1,4 +1,4 @@
-name: Deploy Michi to GitHub Pages
+name: Build and deploy Michi
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: michi-build
   cancel-in-progress: true
 
 jobs:
@@ -25,13 +25,16 @@ jobs:
       - run: npm install
       - run: npm run build
       - uses: actions/configure-pages@v5
+        if: github.event_name == 'workflow_dispatch'
         with:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'workflow_dispatch'
         with:
           path: ./dist
 
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
