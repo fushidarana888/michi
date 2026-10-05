@@ -1,4 +1,4 @@
-name: Build and deploy Michi
+name: Build Michi site
 
 on:
   push:
@@ -6,36 +6,46 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: michi-build
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-sync:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[site-sync]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - run: npm install
       - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Sync production bundle into branch root
+        run: |
+          rm -rf assets
+          cp -R dist/assets ./assets
+          cp dist/app.html ./index.html
+          cp dist/manifest.webmanifest ./manifest.webmanifest
+          cp dist/icon.svg ./icon.svg
+          cp dist/sw.js ./sw.js
+          touch .nojekyll
+
+      - name: Commit production bundle
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html assets manifest.webmanifest icon.svg sw.js .nojekyll
+          if git diff --cached --quiet; then
+            echo "Production bundle is already current"
+            exit 0
+          fi
+          git commit -m "Обновить готовую версию Michi [site-sync]"
+          git push origin HEAD:main
