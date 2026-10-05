@@ -227,6 +227,9 @@ function NavigatorPage({ userId }: { userId: string }) {
   const [nodes, setNodes] = useState<LearningNode[]>([])
   const [logs, setLogs] = useState<StudyLog[]>([])
   const [duration, setDuration] = useState(30)
+  const [customDuration, setCustomDuration] = useState('')
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
+  const [restToday, setRestToday] = useState(false)
   const [logging, setLogging] = useState(false)
   const [busy, setBusy] = useState(true)
   const [errorText, setErrorText] = useState('')
@@ -249,7 +252,35 @@ function NavigatorPage({ userId }: { userId: string }) {
   useEffect(() => { void load() }, [userId])
 
   const cards = useMemo(() => buildAttentionCards(subjects, nodes, logs), [subjects, nodes, logs])
-  const top = cards[0]
+  const suggested = cards[0]
+  const current = selectedSubjectId ? cards.find((card) => card.subject.id === selectedSubjectId) || suggested : suggested
+
+  function chooseDuration(value: number) {
+    setDuration(value)
+    setCustomDuration('')
+  }
+
+  function chooseCustomDuration(value: string) {
+    setCustomDuration(value)
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed > 0) setDuration(Math.min(240, Math.max(1, Math.round(parsed))))
+  }
+
+  function chooseAnotherSubject() {
+    if (!cards.length) return
+    const currentIndex = Math.max(0, cards.findIndex((card) => card.subject.id === current?.subject.id))
+    const next = cards[(currentIndex + 1) % cards.length]
+    setSelectedSubjectId(next.subject.id)
+    setRestToday(false)
+  }
+
+  function durationHint(minutes: number) {
+    if (minutes <= 10) return 'Можно сделать совсем маленький кусок: повторить правило, пару слов или одну короткую задачу.'
+    if (minutes <= 25) return 'Хватит на один понятный кусок без попытки закрыть весь предмет.'
+    if (minutes <= 45) return 'Можно разобрать один инструмент и немного закрепить его практикой.'
+    if (minutes <= 70) return 'Можно сделать полноценный учебный блок: теория плюс несколько задач.'
+    return 'Это уже длинный блок. Лучше заложить короткий перерыв и не пытаться делать всё одним рывком.'
+  }
 
   if (busy) return <LoadingScreen text="Собираем карту внимания…" />
 
@@ -259,7 +290,7 @@ function NavigatorPage({ userId }: { userId: string }) {
         <div>
           <p className="eyebrow">НАВИГАТОР</p>
           <h1>Куда двигаться дальше</h1>
-          <p className="muted">Не «что ты обязан сделать сегодня», а какой следующий шаг сейчас разумнее.</p>
+          <p className="muted">Michi предлагает вариант, а не выдаёт приказ. Можно выбрать другой предмет или вообще не заниматься сегодня.</p>
         </div>
         <button className="secondary-button" onClick={() => setLogging((value) => !value)}><Plus size={17} /> Записать занятие</button>
       </section>
@@ -267,26 +298,76 @@ function NavigatorPage({ userId }: { userId: string }) {
       {logging && <StudyLogComposer userId={userId} subjects={subjects} nodes={nodes} onSaved={() => { setLogging(false); void load() }} />}
 
       <section className="panel recommendation-card">
-        <div className="recommendation-top">
-          <div>
-            <p className="eyebrow">СЕЙЧАС РАЗУМНЕЕ</p>
-            <h2>{top ? `${top.subject.icon || '•'} ${top.subject.name}` : 'Собираем историю'}</h2>
-          </div>
-          <div className="duration-picker">
-            {[15, 30, 60].map((value) => <button key={value} className={duration === value ? 'active' : ''} onClick={() => setDuration(value)}>{value} мин</button>)}
-          </div>
-        </div>
-
-        {top ? (
+        {restToday ? (
           <>
-            <p className="recommendation-action">{top.action}</p>
-            <p className="muted">{top.reason} На {duration} минут достаточно взять один понятный кусок, а не пытаться закрыть весь предмет.</p>
-            <div className="recommendation-meta">
-              <span><Clock3 size={15} /> {top.minutes} мин за 28 дней</span>
-              <span><BookOpen size={15} /> {top.currentNode ? statusLabels[top.currentNode.status] : 'маршрут закрыт'}</span>
+            <p className="eyebrow">СЕГОДНЯ БЕЗ УЧЁБЫ</p>
+            <h2>Окей. Ничего догонять потом не придётся.</h2>
+            <p className="muted">Пропущенного задания здесь не появляется, серия не сгорает и долг не копится. Следующий раз Michi просто снова посмотрит на общую картину.</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+              <button className="secondary-button" type="button" onClick={() => setRestToday(false)}>Если передумаю — показать варианты</button>
             </div>
           </>
-        ) : <p className="muted">После первого записанного занятия Michi начнёт различать направления.</p>}
+        ) : (
+          <>
+            <div className="recommendation-top" style={{ alignItems: 'flex-start' }}>
+              <div>
+                <p className="eyebrow">{selectedSubjectId ? 'ТЫ ВЫБРАЛ' : 'СЕЙЧАС РАЗУМНЕЕ'}</p>
+                <h2>{current ? `${current.subject.icon || '•'} ${current.subject.name}` : 'Собираем историю'}</h2>
+              </div>
+              <div className="duration-picker" style={{ flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 430 }}>
+                {[10, 15, 20, 30, 45, 60, 90].map((value) => <button type="button" key={value} className={!customDuration && duration === value ? 'active' : ''} onClick={() => chooseDuration(value)}>{value} мин</button>)}
+                <input
+                  aria-label="Своё время в минутах"
+                  inputMode="numeric"
+                  min="1"
+                  max="240"
+                  type="number"
+                  value={customDuration}
+                  onChange={(event) => chooseCustomDuration(event.target.value)}
+                  placeholder="своё"
+                  style={{ width: 76, padding: '8px 9px', borderRadius: 10 }}
+                />
+              </div>
+            </div>
+
+            {current ? (
+              <>
+                <p className="recommendation-action">{current.action}</p>
+                <p className="muted">{current.reason} {durationHint(duration)}</p>
+                <div className="recommendation-meta">
+                  <span><Clock3 size={15} /> {current.minutes} мин за 28 дней</span>
+                  <span><BookOpen size={15} /> {current.currentNode ? statusLabels[current.currentNode.status] : 'маршрут закрыт'}</span>
+                  <span><Clock3 size={15} /> сейчас: {duration} мин</span>
+                </div>
+              </>
+            ) : <p className="muted">После первого записанного занятия Michi начнёт различать направления.</p>}
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
+              <button className="secondary-button" type="button" onClick={chooseAnotherSubject}>Другой предмет</button>
+              <button className="secondary-button" type="button" onClick={() => setRestToday(true)}>Сегодня вообще не занимаюсь</button>
+              {selectedSubjectId && <button className="secondary-button" type="button" onClick={() => setSelectedSubjectId(null)}>Вернуть рекомендацию Michi</button>}
+            </div>
+
+            {cards.length > 1 && (
+              <div style={{ marginTop: 16 }}>
+                <span className="muted tiny">Или выбери направление сам:</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 8 }}>
+                  {cards.map((card) => (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      key={card.subject.id}
+                      onClick={() => { setSelectedSubjectId(card.subject.id); setRestToday(false) }}
+                      style={current?.subject.id === card.subject.id ? { borderColor: 'rgba(168,240,208,.5)', color: 'var(--accent)' } : undefined}
+                    >
+                      {card.subject.icon || '•'} {card.subject.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <section>
