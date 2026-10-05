@@ -74,7 +74,7 @@ export interface StudyLog {
   perceived_difficulty: number | null
   note: string | null
   occurred_at: string
-  source: 'manual' | 'task' | 'ai'
+  source: 'manual' | 'task' | 'ai' | 'anki_new' | 'anki_review'
 }
 
 export interface SavingsGoal {
