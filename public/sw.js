@@ -1,4 +1,4 @@
-const CACHE = 'michi-v1'
+const CACHE = 'michi-v3-cards-analytics'
 
 self.addEventListener('install', () => {
   self.skipWaiting()
