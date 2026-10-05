@@ -1,0 +1,41 @@
+.bottom-nav {
+  max-width: 760px !important;
+  grid-template-columns: repeat(6, 1fr) !important;
+}
+
+.cards-bottom-link {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bottom-nav.cards-nav-mode > .bottom-link:first-child.active {
+  background: transparent;
+  color: #7f8a99;
+}
+
+.cards-view-active > :not(.cards-route-root) {
+  display: none !important;
+}
+
+.cards-route-root {
+  display: block;
+}
+
+@media (max-width: 520px) {
+  .bottom-nav {
+    max-width: 100% !important;
+    padding-right: 4px !important;
+    padding-left: 4px !important;
+  }
+
+  .bottom-link {
+    min-width: 0;
+    font-size: .58rem;
+  }
+
+  .bottom-link svg {
+    width: 18px;
+    height: 18px;
+  }
+}
