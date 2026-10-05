@@ -2,92 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Sprout } from 'lucide-react'
 import { loadAnkiDashboardData, type AnkiCardRow, type AnkiReviewRow } from '../lib/anki'
+import {
+  buildCardDifficulty,
+  difficultySeverity,
+  pickDifficultCards,
+  pickUnsettledCards,
+  type CardDifficultyRow,
+} from '../lib/ankiAnalytics'
 import { supabase } from '../lib/supabase'
 import './AnkiDifficultyListPortal.css'
-
-type DifficultyRow = {
-  card: AnkiCardRow
-  recentCount: number
-  again: number
-  hard: number
-  troubleCount: number
-  troubleDays: number
-  lapseRate: number
-  recentErrorRate: number
-  score: number
-}
-
-function percentile(values: number[], p: number) {
-  if (!values.length) return 0
-  const sorted = [...values].sort((a, b) => a - b)
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * p)))
-  return sorted[index]
-}
-
-function buildDifficulty(cards: AnkiCardRow[], reviews: AnkiReviewRow[]) {
-  const byCard = new Map<number, AnkiReviewRow[]>()
-  for (const review of reviews) {
-    const list = byCard.get(review.anki_card_id) || []
-    list.push(review)
-    byCard.set(review.anki_card_id, list)
-  }
-
-  return cards
-    .filter((card) => card.reps > 0)
-    .map((card): DifficultyRow => {
-      const recent = byCard.get(card.anki_card_id) || []
-      const again = recent.filter((review) => review.ease === 1).length
-      const hard = recent.filter((review) => review.ease === 2).length
-      const troublesome = recent.filter((review) => review.ease === 1 || review.ease === 2)
-      const troubleCount = troublesome.length
-      const troubleDays = new Set(troublesome.map((review) => review.reviewed_at.slice(0, 10))).size
-      const recentErrorRate = recent.length ? (again + hard * 0.45) / recent.length : 0
-      const lapseRate = card.reps ? card.lapses / card.reps : 0
-      const evidence = Math.min(1, recent.length / 5)
-      const score = recent.length
-        ? recentErrorRate * (0.5 + evidence * 0.2) + lapseRate * 0.3
-        : lapseRate * 0.65
-      return { card, recentCount: recent.length, again, hard, troubleCount, troubleDays, lapseRate, recentErrorRate, score }
-    })
-    .sort((a, b) => b.score - a.score || b.again - a.again || b.card.lapses - a.card.lapses)
-}
-
-function pickDifficult(rows: DifficultyRow[]) {
-  const withEvidence = rows.filter((row) => row.recentCount >= 3 || row.card.reps >= 6 || row.card.lapses >= 2)
-  const scores = withEvidence.map((row) => row.score)
-  const relativeFloor = Math.max(0.3, percentile(scores, 0.8))
-
-  return rows.filter((row) => {
-    // Один «Снова» среди двух первых показов — это нормальная часть закрепления,
-    // а не доказательство того, что карточка тяжёлая.
-    const repeatedAgain = row.again >= 2 && row.recentCount >= 3
-    const repeatedTrouble = row.troubleCount >= 3 && row.recentCount >= 4 && row.recentErrorRate >= 0.42
-    const troubleAcrossDays = row.troubleDays >= 2 && row.troubleCount >= 2 && row.recentCount >= 3
-    const repeatedRelearning = row.card.reps >= 6 && row.card.lapses >= 2 && row.lapseRate >= 0.12
-    const relativeOutlier = row.recentCount >= 5 && row.troubleCount >= 2 && row.score >= relativeFloor && row.score >= 0.28
-    return repeatedAgain || repeatedTrouble || troubleAcrossDays || repeatedRelearning || relativeOutlier
-  })
-}
-
-function pickUnsettled(rows: DifficultyRow[], difficult: DifficultyRow[]) {
-  const difficultIds = new Set(difficult.map((row) => row.card.anki_card_id))
-  return rows.filter((row) => {
-    if (difficultIds.has(row.card.anki_card_id)) return false
-    if (row.troubleCount === 0) return false
-
-    // Здесь как раз живут карточки вида «2 показа, 1 Снова»: материала ещё мало,
-    // чтобы ставить ярлык «тяжёлая», но видно, что карточка пока не закрепилась.
-    const earlyLearning = row.card.reps <= 4 && row.recentCount <= 4
-    const littleEvidence = row.recentCount <= 3 && row.troubleCount >= 1
-    return earlyLearning || littleEvidence
-  })
-}
-
-function severity(row: DifficultyRow) {
-  if (row.again >= 4 || row.troubleDays >= 3 || row.score >= 0.68 || row.card.lapses >= 4) return 'очень тяжело'
-  if (row.again >= 2 || row.troubleDays >= 2 || row.score >= 0.45 || row.card.lapses >= 2) return 'тяжело'
-  return 'устойчивая проблема'
-}
 
 function harmonizeTerms() {
   const panel = document.querySelector<HTMLElement>('.anki-panel')
@@ -105,7 +28,7 @@ function harmonizeTerms() {
   }
 }
 
-function CardSignals({ row, unsettled = false }: { row: DifficultyRow; unsettled?: boolean }) {
+function CardSignals({ row, unsettled = false }: { row: CardDifficultyRow; unsettled?: boolean }) {
   return (
     <article className="anki-adaptive-item" key={row.card.anki_card_id}>
       <div className="anki-adaptive-word">
@@ -115,7 +38,7 @@ function CardSignals({ row, unsettled = false }: { row: DifficultyRow; unsettled
       <div className="anki-adaptive-signals">
         {unsettled
           ? <span className="anki-severity anki-unsettled-badge">ещё не закрепилась</span>
-          : <span className={`anki-severity severity-${severity(row).replaceAll(' ', '-')}`}>{severity(row)}</span>}
+          : <span className={`anki-severity severity-${difficultySeverity(row).replaceAll(' ', '-')}`}>{difficultySeverity(row)}</span>}
         <span>«Снова» 30д: <b>{row.again}</b></span>
         <span>«Трудно» 30д: <b>{row.hard}</b></span>
         <span>переучиваний: <b>{row.card.lapses}</b></span>
@@ -177,9 +100,9 @@ export function AnkiDifficultyListPortal() {
     return () => target.classList.remove('michi-adaptive-hard-list')
   }, [target])
 
-  const rows = useMemo(() => buildDifficulty(cards, reviews), [cards, reviews])
-  const difficult = useMemo(() => pickDifficult(rows), [rows])
-  const unsettled = useMemo(() => pickUnsettled(rows, difficult), [rows, difficult])
+  const rows = useMemo(() => buildCardDifficulty(cards, reviews), [cards, reviews])
+  const difficult = useMemo(() => pickDifficultCards(rows), [rows])
+  const unsettled = useMemo(() => pickUnsettledCards(rows, difficult), [rows, difficult])
 
   if (!target) return null
 
@@ -190,7 +113,7 @@ export function AnkiDifficultyListPortal() {
         <div>
           <span>Тяжёлые карточки</span>
           <strong>{difficult.length ? `${difficult.length} ${difficult.length === 1 ? 'карточка с устойчивой проблемой' : 'карточек с устойчивой проблемой'}` : 'устойчиво тяжёлых сейчас нет'}</strong>
-          <small>«Тяжёлая» теперь означает повторяющуюся проблему: несколько «Снова»/«Трудно» на разных повторениях или повторные возвраты в переучивание. Один промах в начале сюда не попадает.</small>
+          <small>Один «Снова» из двух первых показов не делает карточку тяжёлой. Нужна повторяющаяся проблема на достаточном количестве показов или несколько возвратов в переучивание.</small>
         </div>
       </div>
 
@@ -206,7 +129,7 @@ export function AnkiDifficultyListPortal() {
             <Sprout size={18} />
             <div>
               <strong>Ещё не закрепились · {unsettled.length}</strong>
-              <small>Здесь мало истории: ошибка уже была, но данных недостаточно, чтобы считать карточку реально тяжёлой.</small>
+              <small>Ошибка уже была, но карточка ещё слишком молодая, чтобы делать вывод о реальной сложности.</small>
             </div>
           </div>
           <div className="anki-adaptive-list">
@@ -215,7 +138,7 @@ export function AnkiDifficultyListPortal() {
         </section>
       )}
 
-      <p className="anki-lapse-help"><strong>Переучивание</strong> — это то, что Anki называет lapse: карточка уже дошла до обычных повторений, ты нажал «Снова», и Anki вернул её в режим переучивания. Это не то же самое, что все нажатия «Снова»: ошибки во время первого изучения сюда обычно не прибавляются.</p>
+      <p className="anki-lapse-help"><strong>Переучивание</strong> — это lapse в Anki: карточка уже вышла в обычные повторения, затем была забыта и вернулась в режим переучивания. Ошибка во время первого знакомства с карточкой обычно сюда не относится.</p>
     </div>,
     target,
   )
