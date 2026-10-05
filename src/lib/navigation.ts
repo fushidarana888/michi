@@ -3,6 +3,8 @@ import type { Goal, LearningNode, StudyLog, Subject } from '../types'
 import { daysSince } from './date'
 import { supabase } from './supabase'
 
+const PREFERRED_NODE_PREFIX = 'michi-preferred-node:'
+
 export interface AttentionCard {
   subject: Subject
   minutes: number
@@ -14,6 +16,31 @@ export interface AttentionCard {
   state: 'new' | 'needs_attention' | 'balanced' | 'recently_heavy'
   reason: string
   action: string
+}
+
+export function preferredNodeKey(subjectId: string) {
+  return `${PREFERRED_NODE_PREFIX}${subjectId}`
+}
+
+export function getPreferredNode(subjectId: string, subjectNodes: LearningNode[]) {
+  let preferredId: string | null = null
+  try {
+    preferredId = localStorage.getItem(preferredNodeKey(subjectId))
+  } catch {
+    preferredId = null
+  }
+
+  const preferred = preferredId ? subjectNodes.find((node) => node.id === preferredId) : null
+  return preferred || subjectNodes.find((node) => node.status !== 'solid') || subjectNodes[0] || null
+}
+
+export function setPreferredNode(subjectId: string, nodeId: string | null) {
+  try {
+    if (nodeId) localStorage.setItem(preferredNodeKey(subjectId), nodeId)
+    else localStorage.removeItem(preferredNodeKey(subjectId))
+  } catch {
+    // Local preference is helpful, but the study flow must keep working without it.
+  }
 }
 
 export async function ensureWorkspace(userId: string) {
@@ -132,9 +159,26 @@ export async function loadNavigationData(userId: string, windowDays = 28) {
   if (logResult.error) throw logResult.error
   if (goalResult.error) throw goalResult.error
 
+  const subjects = (subjectResult.data || []) as Subject[]
+  const allNodes = (nodeResult.data || []) as LearningNode[]
+
+  // Old, generalized roadmap rows are kept in the database so historical logs do not break,
+  // but the live UI only shows nodes that exist in the current preset.
+  const allowedTitlesBySubjectId = new Map<string, Set<string>>()
+  for (const subject of subjects) {
+    const preset = STUDY_PRESETS.find((item) => item.slug === subject.slug)
+    if (!preset) continue
+    allowedTitlesBySubjectId.set(subject.id, new Set(preset.roadmap.map(([title]) => title)))
+  }
+
+  const nodes = allNodes.filter((node) => {
+    const allowed = allowedTitlesBySubjectId.get(node.subject_id)
+    return !allowed || allowed.has(node.title)
+  })
+
   return {
-    subjects: (subjectResult.data || []) as Subject[],
-    nodes: (nodeResult.data || []) as LearningNode[],
+    subjects,
+    nodes,
     logs: (logResult.data || []) as StudyLog[],
     goals: (goalResult.data || []) as Goal[],
   }
@@ -143,11 +187,11 @@ export async function loadNavigationData(userId: string, windowDays = 28) {
 function nextAction(node: LearningNode | null) {
   if (!node) return 'Маршрут закрыт: бери смешанную практику или пробник.'
 
-  if (node.status === 'not_started') return `Разобрать следующий инструмент: ${node.title}.`
-  if (node.status === 'learning') return `Продолжить разбираться: ${node.title}.`
+  if (node.status === 'not_started') return `Разобрать: ${node.title}.`
+  if (node.status === 'learning') return `Продолжить: ${node.title}.`
   if (node.status === 'assisted') return `Попробовать без подсказки: ${node.title}.`
   if (node.status === 'independent') return `Проверить и закрепить: ${node.title}.`
-  return `Перейти дальше после ${node.title}.`
+  return `Повторить или выбрать другую часть вместо ${node.title}.`
 }
 
 export function buildAttentionCards(subjects: Subject[], nodes: LearningNode[], logs: StudyLog[]): AttentionCard[] {
@@ -163,19 +207,19 @@ export function buildAttentionCards(subjects: Subject[], nodes: LearningNode[], 
     const gapDays = Math.max(1, Number(subject.recommended_gap_days || 7))
     const daysSinceLast = latest ? daysSince(latest) : null
     const subjectNodes = nodes.filter((node) => node.subject_id === subject.id).sort((a, b) => a.sort_order - b.sort_order)
-    const currentNode = subjectNodes.find((node) => node.status !== 'solid') || null
+    const automaticNode = subjectNodes.find((node) => node.status !== 'solid') || subjectNodes[0] || null
 
     const underAttention = totalMinutes
       ? Math.max(0, targetShare - share) / Math.max(targetShare, 0.01)
       : 0.7
     const staleness = daysSinceLast === null ? 1.7 : Math.min(daysSinceLast / gapDays, 2.5)
-    const learningNeed = !currentNode
+    const learningNeed = !automaticNode
       ? 0.1
-      : currentNode.status === 'not_started'
+      : automaticNode.status === 'not_started'
         ? 0.7
-        : currentNode.status === 'learning'
+        : automaticNode.status === 'learning'
           ? 0.9
-          : currentNode.status === 'assisted'
+          : automaticNode.status === 'assisted'
             ? 0.7
             : 0.35
     const recentlyHeavy = totalMinutes >= 120 && share > targetShare * 1.45
@@ -194,21 +238,27 @@ export function buildAttentionCards(subjects: Subject[], nodes: LearningNode[], 
       state = 'needs_attention'
       reason = daysSinceLast >= gapDays
         ? `Последнее занятие было ${daysSinceLast} дн. назад.`
-        : `За 28 дней этому направлению досталось заметно меньше внимания, чем остальным важным целям.`
+        : 'За 28 дней этому направлению досталось заметно меньше внимания, чем остальным важным целям.'
     }
 
-    return {
+    const card = {
       subject,
       minutes,
       share,
       targetShare,
       daysSinceLast,
-      currentNode,
       score,
       state,
       reason,
-      action: nextAction(currentNode),
-    }
+      get currentNode() {
+        return getPreferredNode(subject.id, subjectNodes)
+      },
+      get action() {
+        return nextAction(getPreferredNode(subject.id, subjectNodes))
+      },
+    } satisfies AttentionCard
+
+    return card
   })
 
   return cards.sort((a, b) => b.score - a.score)
