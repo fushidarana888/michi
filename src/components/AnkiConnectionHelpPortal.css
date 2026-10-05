@@ -1,0 +1,35 @@
+.anki-connection-help {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 197, 102, .28);
+  border-radius: 14px;
+  background: rgba(255, 197, 102, .055);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.anki-connection-help > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.anki-connection-help > div {
+  display: grid;
+  gap: 8px;
+}
+
+.anki-connection-help p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.anki-connection-help code {
+  color: var(--text);
+  font-size: .92em;
+}
+
+.anki-connection-help button {
+  justify-self: start;
+}
