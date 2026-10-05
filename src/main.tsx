@@ -5,6 +5,7 @@ import App from './AppV2'
 import { AnkiConnectionHelpPortal } from './components/AnkiConnectionHelpPortal'
 import { AnkiDifficultyListPortal } from './components/AnkiDifficultyListPortal'
 import { AnkiIntegrationPortal } from './components/AnkiIntegrationPortal'
+import { AnkiStudyRefreshPortal } from './components/AnkiStudyRefreshPortal'
 import { RouteSelectionPortal } from './components/RouteSelectionPortal'
 import { StudyPartSelectorPortal } from './components/StudyPartSelectorPortal'
 import { installLoopbackFetchSupport } from './lib/loopbackFetch'
@@ -21,6 +22,7 @@ createRoot(document.getElementById('root')!).render(
       <AnkiIntegrationPortal />
       <AnkiDifficultyListPortal />
       <AnkiConnectionHelpPortal />
+      <AnkiStudyRefreshPortal />
     </HashRouter>
   </StrictMode>,
 )
