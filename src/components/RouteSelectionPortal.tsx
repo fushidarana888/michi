@@ -15,7 +15,7 @@ export function RouteSelectionPortal() {
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [nodes, setNodes] = useState<LearningNode[]>([])
   const [targets, setTargets] = useState<RouteTarget[]>([])
-  const [selected, setSelected] = useState<Record<string, string>>({})
+  const [, forceRefresh] = useState(0)
   const targetSignature = useRef('')
 
   useEffect(() => {
@@ -49,7 +49,7 @@ export function RouteSelectionPortal() {
         })
         .filter((item): item is RouteTarget => Boolean(item))
 
-      const signature = next.map((item) => `${item.subject.id}:${item.element.dataset.michiRouteKey || ''}`).join('|') + `:${next.length}`
+      const signature = next.map((item) => item.subject.id).join('|') + `:${next.length}`
       if (signature !== targetSignature.current || next.some((item, index) => targets[index]?.element !== item.element)) {
         targetSignature.current = signature
         setTargets(next)
@@ -75,22 +75,10 @@ export function RouteSelectionPortal() {
   }, [subjects, nodes])
 
   useEffect(() => {
-    if (!subjects.length) return
-    const next: Record<string, string> = {}
-    for (const subject of subjects) {
-      const subjectNodes = nodesBySubject.get(subject.id) || []
-      const preferred = getPreferredNode(subject.id, subjectNodes)
-      if (preferred) next[subject.id] = preferred.id
-    }
-    setSelected(next)
-  }, [subjects, nodesBySubject])
-
-  useEffect(() => {
     for (const { element, subject } of targets) {
       element.classList.add('route-selection-managed')
       const subjectNodes = nodesBySubject.get(subject.id) || []
-      const selectedId = selected[subject.id] || getPreferredNode(subject.id, subjectNodes)?.id
-      const selectedNode = subjectNodes.find((node) => node.id === selectedId) || null
+      const selectedNode = getPreferredNode(subject.id, subjectNodes)
       const rows = [...element.querySelectorAll<HTMLElement>('.learning-node')]
 
       for (const row of rows) row.classList.remove('current-node', 'michi-selected-node')
@@ -99,11 +87,11 @@ export function RouteSelectionPortal() {
         row?.classList.add('current-node', 'michi-selected-node')
       }
     }
-  }, [targets, selected, nodesBySubject])
+  }, [targets, nodesBySubject])
 
   function choose(subjectId: string, nodeId: string) {
     setPreferredNode(subjectId, nodeId)
-    setSelected((current) => ({ ...current, [subjectId]: nodeId }))
+    forceRefresh((value) => value + 1)
   }
 
   return (
@@ -111,7 +99,7 @@ export function RouteSelectionPortal() {
       {targets.map(({ element, subject }) => {
         const header = element.querySelector<HTMLElement>('.route-header') || element
         const subjectNodes = nodesBySubject.get(subject.id) || []
-        const preferred = subjectNodes.find((node) => node.id === selected[subject.id]) || getPreferredNode(subject.id, subjectNodes)
+        const preferred = getPreferredNode(subject.id, subjectNodes)
         if (!preferred) return null
 
         return createPortal(
