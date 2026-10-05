@@ -1,0 +1,18 @@
+{
+  "name": "Michi",
+  "short_name": "Michi",
+  "description": "Большая цель. Следующий шаг.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10131a",
+  "theme_color": "#10131a",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
