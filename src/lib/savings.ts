@@ -31,9 +31,18 @@ export function buildSavingsAdvice(
   const currentBalance = running
   const autoRatio = Number(goal.auto_floor_ratio ?? 0.7)
   const manualFloor = Number(goal.protected_floor_rub ?? 0)
+  const weeklyFloor = Math.max(0, Number(goal.weekly_floor_rub ?? 0))
   const baseRatio = Number(goal.base_save_ratio ?? 0.4)
   const automaticFloor = roundDown(peak * autoRatio, 500)
-  const effectiveFloor = Math.max(manualFloor, automaticFloor)
+  const effectiveFloor = Math.max(manualFloor, automaticFloor, weeklyFloor)
+
+  let floorSource: SavingsAdvice['floorSource'] = 'none'
+  if (effectiveFloor > 0) {
+    if (manualFloor >= automaticFloor && manualFloor >= weeklyFloor) floorSource = 'manual'
+    else if (weeklyFloor >= automaticFloor) floorSource = 'weekly'
+    else floorSource = 'peak'
+  }
+
   const freeToSpend = Math.max(0, currentBalance - effectiveFloor)
   const reserveGap = Math.max(0, effectiveFloor - currentBalance)
 
@@ -72,25 +81,27 @@ export function buildSavingsAdvice(
     }
 
     recommendedFromNextIncome = roundRecommendation(Math.min(income * 0.75, recoveryTarget))
-    recommendedSaveRatio = recommendedFromNextIncome / income
+    recommendedSaveRatio = income > 0 ? recommendedFromNextIncome / income : baseRatio
   }
 
   let state: SavingsAdvice['state'] = 'building'
   let headline = 'Запас только формируется'
-  let detail = 'Пока защитная линия небольшая. По мере роста копилки Michi будет автоматически оставлять большую часть прошлых достижений неприкосновенной.'
+  let detail = 'Недельная линия будет понемногу поднимать минимальный баланс. Это темп накоплений, а не долг перед приложением.'
 
   if (reserveGap > 0) {
     state = 'recovering'
-    headline = `Защитный запас просел на ${Math.round(reserveGap).toLocaleString('ru-RU')} ₽`
-    detail = 'Следующее поступление лучше заметно сильнее направить в запас, но закрывать всю разницу одним разом не нужно. Это ориентир, а не обязательный платёж.'
+    headline = `До текущего минимума не хватает ${Math.round(reserveGap).toLocaleString('ru-RU')} ₽`
+    detail = floorSource === 'weekly'
+      ? 'Недельная линия уже поднялась выше текущего баланса. Со следующего поступления лучше отложить побольше, но закрывать разницу одним разом не обязательно.'
+      : 'Защитный запас просел. Следующее поступление лучше заметно сильнее направить в запас, но закрывать всю разницу одним разом не нужно.'
   } else if (effectiveFloor > 0) {
     state = 'protected'
     if (freeToSpend > 0) {
       headline = `Свободно до ${Math.round(freeToSpend).toLocaleString('ru-RU')} ₽`
-      detail = `Остальные ${Math.round(effectiveFloor).toLocaleString('ru-RU')} ₽ лучше считать неприкосновенной частью долгой цели.`
+      detail = `Остальные ${Math.round(effectiveFloor).toLocaleString('ru-RU')} ₽ лучше считать минимальным уровнем долгой цели.`
     } else {
-      headline = 'Свободной части внутри копилки сейчас нет'
-      detail = `Баланс находится у защитной линии ${Math.round(effectiveFloor).toLocaleString('ru-RU')} ₽. Трата уже будет забирать деньги из долгосрочного запаса.`
+      headline = 'Ты прямо у текущего минимума'
+      detail = 'Внутри копилки сейчас нет свободной части. Следующая недельная ступень поднимет планку ещё немного.'
     }
   }
 
@@ -98,7 +109,9 @@ export function buildSavingsAdvice(
     currentBalance,
     peakBalance: peak,
     automaticFloor,
+    weeklyFloor,
     effectiveFloor,
+    floorSource,
     freeToSpend,
     reserveGap,
     recentSaveRatio,
