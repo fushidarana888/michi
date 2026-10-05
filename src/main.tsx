@@ -6,7 +6,10 @@ import { AnkiConnectionHelpPortal } from './components/AnkiConnectionHelpPortal'
 import { AnkiIntegrationPortal } from './components/AnkiIntegrationPortal'
 import { RouteSelectionPortal } from './components/RouteSelectionPortal'
 import { StudyPartSelectorPortal } from './components/StudyPartSelectorPortal'
+import { installLoopbackFetchSupport } from './lib/loopbackFetch'
 import './styles.css'
+
+installLoopbackFetchSupport()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
