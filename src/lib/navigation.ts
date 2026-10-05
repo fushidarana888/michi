@@ -29,10 +29,18 @@ export async function ensureWorkspace(userId: string) {
     is_active: true,
   }))
 
+  const { error: subjectUpsertError } = await supabase
+    .from('subjects')
+    .upsert(subjectRows, { onConflict: 'user_id,slug', ignoreDuplicates: true })
+
+  if (subjectUpsertError) throw subjectUpsertError
+
   const { data: subjects, error: subjectError } = await supabase
     .from('subjects')
-    .upsert(subjectRows, { onConflict: 'user_id,slug' })
     .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .order('sort_order')
 
   if (subjectError) throw subjectError
 
