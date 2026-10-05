@@ -1,58 +1,55 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import {
   BarChart3,
+  BookOpen,
   Brain,
-  CalendarDays,
-  Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Home,
-  LoaderCircle,
+  Clock3,
+  Compass,
   LogOut,
+  Map,
+  PiggyBank,
+  Plus,
   Settings,
   Smile,
   Sparkles,
-  Target,
 } from 'lucide-react'
-import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { LEARNING_STATUS_OPTIONS, MOODS, reasonsForMood } from './data/presets'
+import { formatDateRu, localDateKey } from './lib/date'
+import { buildAttentionCards, ensureWorkspace, loadNavigationData } from './lib/navigation'
 import { supabase } from './lib/supabase'
-import { ensureTodayPlan, taskVisibleAtTier } from './lib/planner'
-import { formatDateRu, localDateKey, monthStartKey } from './lib/date'
-import {
-  MOODS,
-  STUDY_PRESETS,
-  reasonsForMood,
-} from './data/presets'
 import type {
-  Goal,
+  LearningNode,
+  LearningStatus,
   MoodEntry,
   Profile,
-  StudyTask,
+  SavingsGoal,
+  SavingsTransaction,
+  StudyLog,
   Subject,
-  Tier,
-  Topic,
 } from './types'
 
-const tierLabels: Record<Tier, string> = {
-  minimum: 'Минимум',
-  normal: 'Норма',
-  boost: 'Усиленный',
-}
+const activityLabels = {
+  theory: 'Теория',
+  practice: 'Практика',
+  review: 'Повторение',
+  test: 'Тест / вариант',
+  lesson: 'Урок',
+  other: 'Другое',
+} as const
 
-const difficultyLabels = [
-  { value: 1, label: 'Легко' },
-  { value: 2, label: 'Нормально' },
-  { value: 3, label: 'Тяжело' },
-  { value: 4, label: 'Не понял' },
-]
+const statusLabels = Object.fromEntries(LEARNING_STATUS_OPTIONS) as Record<LearningStatus, string>
 
-function LoadingScreen() {
+function LoadingScreen({ text = 'Загружаем Michi…' }: { text?: string }) {
   return (
     <div className="center-screen">
       <div className="brand-mark">M</div>
-      <LoaderCircle className="spin" size={24} />
-      <p>Загружаем Michi…</p>
+      <div className="loader-dot" />
+      <p className="muted">{text}</p>
     </div>
   )
 }
@@ -65,7 +62,7 @@ function AuthPage() {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
 
-  async function submit(event: React.FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
     setMessage('')
@@ -78,13 +75,11 @@ function AuthPage() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            data: { display_name: name || 'Ученик' },
-          },
+          options: { data: { display_name: name || 'Ученик' } },
         })
         if (error) throw error
         if (!data.session) {
-          setMessage('Аккаунт создан. Если Supabase попросил подтверждение почты, открой письмо и вернись сюда.')
+          setMessage('Аккаунт создан. Если Supabase попросил подтверждение почты, открой письмо и затем войди.')
         }
       }
     } catch (error) {
@@ -96,1135 +91,613 @@ function AuthPage() {
 
   return (
     <main className="auth-page">
-      <section className="auth-hero">
+      <section className="auth-copy">
         <div className="brand-mark large">M</div>
         <p className="eyebrow">MICHI</p>
-        <h1>Большая цель.<br />Следующий шаг.</h1>
-        <p className="muted">
-          Учебный план, который разбивает длинные цели на маленькие задачи и не превращает каждый вечер в пять часов зубрёжки.
+        <h1>Не трекер привычек.<br />Навигатор на годы.</h1>
+        <p className="muted lead">
+          Michi не ругает за пропуски и не требует ежедневных галочек. Он нужен, чтобы ты не мог год заниматься только тем, что и так нравится и получается.
         </p>
       </section>
 
-      <section className="auth-card panel">
+      <section className="panel auth-card">
         <div className="segmented">
           <button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>Войти</button>
           <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Создать аккаунт</button>
         </div>
 
-        <form onSubmit={submit} className="form-stack">
+        <form className="form-stack" onSubmit={submit}>
           {mode === 'signup' && (
             <label>
               <span>Как тебя называть</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя или ник" />
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Имя или ник" />
             </label>
           )}
           <label>
             <span>Email</span>
-            <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
           <label>
             <span>Пароль</span>
-            <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 6 символов" />
+            <input required minLength={6} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </label>
-          <button className="primary-button" disabled={busy}>
-            {busy ? 'Подождите…' : mode === 'signin' ? 'Войти в Michi' : 'Начать путь'}
-          </button>
+          <button className="primary-button" disabled={busy}>{busy ? 'Подождите…' : mode === 'signin' ? 'Войти' : 'Начать путь'}</button>
         </form>
-
         {message && <p className="form-message">{message}</p>}
       </section>
     </main>
   )
 }
 
-function OnboardingPage({
-  userId,
-  profile,
-  onDone,
-}: {
-  userId: string
-  profile: Profile
-  onDone: () => void
-}) {
+function OnboardingPage({ profile, onDone }: { profile: Profile; onDone: () => void }) {
   const [displayName, setDisplayName] = useState(profile.display_name || '')
-  const [targetDate, setTargetDate] = useState('2028-06-01')
-  const [light, setLight] = useState(profile.daily_minutes_light || 30)
-  const [normal, setNormal] = useState(profile.daily_minutes_normal || 75)
-  const [boost, setBoost] = useState(profile.daily_minutes_boost || 110)
   const [busy, setBusy] = useState(false)
   const [errorText, setErrorText] = useState('')
 
   async function finish() {
     setBusy(true)
     setErrorText('')
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    const { error } = await supabase
+      .from('profiles')
+      .update({ display_name: displayName || 'Ученик', timezone, onboarding_completed: true })
+      .eq('id', profile.id)
 
-    try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-      const subjectRows = STUDY_PRESETS.map((preset, index) => ({
-        user_id: userId,
-        name: preset.name,
-        slug: preset.slug,
-        icon: preset.icon,
-        sort_order: index,
-      }))
-
-      const { data: subjects, error: subjectError } = await supabase
-        .from('subjects')
-        .upsert(subjectRows, { onConflict: 'user_id,slug' })
-        .select('*')
-
-      if (subjectError) throw subjectError
-
-      for (const preset of STUDY_PRESETS) {
-        const subject = subjects?.find((item) => item.slug === preset.slug)
-        if (!subject) continue
-
-        const { data: existingGoal } = await supabase
-          .from('goals')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('subject_id', subject.id)
-          .eq('title', preset.goalTitle)
-          .maybeSingle()
-
-        let goal = existingGoal
-
-        if (!goal) {
-          const { data, error } = await supabase
-            .from('goals')
-            .insert({
-              user_id: userId,
-              subject_id: subject.id,
-              title: preset.goalTitle,
-              description: preset.goalDescription,
-              target_date: targetDate,
-            })
-            .select('*')
-            .single()
-          if (error) throw error
-          goal = data
-        }
-
-        const topicRows = preset.topics.map(([topicName, priority]) => ({
-          user_id: userId,
-          subject_id: subject.id,
-          name: topicName,
-          priority,
-          mastery: 10,
-        }))
-
-        const { error: topicError } = await supabase
-          .from('topics')
-          .upsert(topicRows, { onConflict: 'user_id,subject_id,name' })
-        if (topicError) throw topicError
-
-        const { count: stageCount, error: stageCountError } = await supabase
-          .from('goal_stages')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('goal_id', goal.id)
-
-        if (stageCountError) throw stageCountError
-
-        if (!stageCount) {
-          const { error: stageError } = await supabase.from('goal_stages').insert(
-            preset.stages.map((stage, index) => ({
-              user_id: userId,
-              goal_id: goal.id,
-              title: stage,
-              sort_order: index,
-              status: index === 0 ? 'active' : 'planned',
-            })),
-          )
-          if (stageError) throw stageError
-        }
-
-        const { error: milestoneError } = await supabase
-          .from('monthly_milestones')
-          .upsert(
-            {
-              user_id: userId,
-              goal_id: goal.id,
-              month_start: monthStartKey(),
-              title: 'Первый месяц: войти в ритм',
-              description: 'Начать регулярно заниматься без перегруза и собрать первые данные о слабых местах.',
-              status: 'active',
-            },
-            { onConflict: 'goal_id,month_start' },
-          )
-        if (milestoneError) throw milestoneError
-      }
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          display_name: displayName || 'Ученик',
-          timezone,
-          daily_minutes_light: light,
-          daily_minutes_normal: normal,
-          daily_minutes_boost: boost,
-          onboarding_completed: true,
-        })
-        .eq('id', userId)
-
-      if (profileError) throw profileError
-      onDone()
-    } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'Не удалось закончить настройку')
-    } finally {
-      setBusy(false)
+    setBusy(false)
+    if (error) {
+      setErrorText(error.message)
+      return
     }
+    onDone()
   }
 
   return (
     <main className="onboarding-page">
-      <section className="onboarding-card panel">
-        <p className="eyebrow">ПЕРВЫЙ ЗАПУСК</p>
-        <h1>Настроим твой путь</h1>
-        <p className="muted">
-          Сейчас создадим три большие цели. Потом Michi будет превращать их в короткие ежедневные занятия.
+      <section className="panel onboarding-card">
+        <p className="eyebrow">КАК РАБОТАЕТ MICHI</p>
+        <h1>У тебя уже есть дисциплина. Нужна карта.</h1>
+        <p className="muted lead">
+          Здесь не будет серии дней, штрафов за пропуск и «37 просроченных задач». Michi смотрит на несколько недель подготовки и подсказывает, какое направление ты давно обходишь и какой инструмент там логично брать следующим.
         </p>
 
-        <div className="goal-preview-grid">
-          {STUDY_PRESETS.map((preset) => (
-            <div className="goal-preview" key={preset.slug}>
-              <span className="subject-icon">{preset.icon}</span>
-              <strong>{preset.goalTitle}</strong>
-              <small>{preset.goalDescription}</small>
-            </div>
-          ))}
+        <div className="principle-grid">
+          <div><Compass size={22} /><strong>Карта внимания</strong><span>Показывает, куда реально ушло время за последние недели.</span></div>
+          <div><Map size={22} /><strong>Карта знаний</strong><span>Отличает «не умею инструмент» от «надо больше решать».</span></div>
+          <div><PiggyBank size={22} /><strong>Сбережения</strong><span>Фиксирует реальные пополнения без обязательной недельной нормы.</span></div>
         </div>
 
-        <div className="form-grid">
-          <label>
-            <span>Имя или ник</span>
-            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-          </label>
-          <label>
-            <span>Ориентир по сроку</span>
-            <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-          </label>
-        </div>
+        <label className="onboarding-name">
+          <span>Имя или ник</span>
+          <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+        </label>
 
-        <h3>Сколько времени нормально тратить на учёбу дома?</h3>
-        <div className="time-budget-grid">
-          <TimeBudget label="Тяжёлый день" value={light} onChange={setLight} hint="минимум" />
-          <TimeBudget label="Обычный день" value={normal} onChange={setNormal} hint="норма" />
-          <TimeBudget label="Есть силы" value={boost} onChange={setBoost} hint="по желанию" />
-        </div>
-
-        <button className="primary-button wide" onClick={finish} disabled={busy}>
-          {busy ? 'Создаём маршрут…' : 'Создать мой план'}
-        </button>
+        <button className="primary-button wide" onClick={finish} disabled={busy}>{busy ? 'Настраиваем…' : 'Открыть мой маршрут'}</button>
         {errorText && <p className="form-message error">{errorText}</p>}
       </section>
     </main>
   )
 }
 
-function TimeBudget({
-  label,
-  value,
-  onChange,
-  hint,
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-  hint: string
-}) {
-  return (
-    <label className="time-budget">
-      <span>{label}</span>
-      <strong>{value} мин</strong>
-      <small>{hint}</small>
-      <input
-        type="range"
-        min={15}
-        max={180}
-        step={5}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  )
-}
-
-function AppShell({
-  userId,
-  profile,
-  reloadProfile,
-}: {
-  userId: string
-  profile: Profile
-  reloadProfile: () => Promise<void>
-}) {
+function AppShell({ userId, profile, reloadProfile }: { userId: string; profile: Profile; reloadProfile: () => Promise<void> }) {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand-inline">
+        <NavLink className="brand-inline" to="/navigate">
           <div className="brand-mark small">M</div>
-          <div>
-            <strong>Michi</strong>
-            <span>Большая цель. Следующий шаг.</span>
-          </div>
-        </div>
-        <NavLink to="/settings" className="icon-button" aria-label="Настройки">
-          <Settings size={20} />
+          <div><strong>Michi</strong><span>Большая цель. Следующий шаг.</span></div>
         </NavLink>
+        <NavLink to="/settings" className="icon-button" aria-label="Настройки"><Settings size={19} /></NavLink>
       </header>
 
       <main className="app-content">
         <Routes>
-          <Route path="/today" element={<TodayPage userId={userId} profile={profile} />} />
-          <Route path="/goals" element={<GoalsPage userId={userId} />} />
-          <Route path="/mood" element={<MoodPage userId={userId} />} />
+          <Route path="/navigate" element={<NavigatorPage userId={userId} />} />
+          <Route path="/route" element={<RouteMapPage userId={userId} />} />
+          <Route path="/savings" element={<SavingsPage userId={userId} />} />
           <Route path="/progress" element={<ProgressPage userId={userId} />} />
+          <Route path="/mood" element={<MoodPage userId={userId} />} />
           <Route path="/tutor" element={<TutorPage profile={profile} />} />
-          <Route path="/settings" element={<SettingsPage profile={profile} reloadProfile={reloadProfile} />} />
-          <Route path="*" element={<Navigate to="/today" replace />} />
+          <Route path="/settings" element={<SettingsPage userId={userId} profile={profile} reloadProfile={reloadProfile} />} />
+          <Route path="*" element={<Navigate to="/navigate" replace />} />
         </Routes>
       </main>
 
       <nav className="bottom-nav">
-        <BottomLink to="/today" icon={<Home size={20} />} label="Сегодня" />
-        <BottomLink to="/goals" icon={<Target size={20} />} label="Цели" />
+        <BottomLink to="/navigate" icon={<Compass size={20} />} label="Куда дальше" />
+        <BottomLink to="/route" icon={<Map size={20} />} label="Маршрут" />
+        <BottomLink to="/savings" icon={<PiggyBank size={20} />} label="Деньги" />
+        <BottomLink to="/progress" icon={<BarChart3 size={20} />} label="Картина" />
         <BottomLink to="/mood" icon={<Smile size={20} />} label="Настроение" />
-        <BottomLink to="/progress" icon={<BarChart3 size={20} />} label="Прогресс" />
-        <BottomLink to="/tutor" icon={<Sparkles size={20} />} label="ИИ" />
       </nav>
     </div>
   )
 }
 
-function BottomLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
+function BottomLink({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
   return (
     <NavLink to={to} className={({ isActive }) => 'bottom-link' + (isActive ? ' active' : '')}>
-      {icon}
-      <span>{label}</span>
+      {icon}<span>{label}</span>
     </NavLink>
   )
 }
 
-function TodayPage({ userId, profile }: { userId: string; profile: Profile }) {
-  const [tier, setTier] = useState<Tier>('normal')
-  const [tasks, setTasks] = useState<StudyTask[]>([])
-  const [subjects, setSubjects] = useState<Record<string, Subject>>({})
-  const [results, setResults] = useState<Record<string, number>>({})
+function NavigatorPage({ userId }: { userId: string }) {
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [nodes, setNodes] = useState<LearningNode[]>([])
+  const [logs, setLogs] = useState<StudyLog[]>([])
+  const [duration, setDuration] = useState(30)
+  const [logging, setLogging] = useState(false)
   const [busy, setBusy] = useState(true)
   const [errorText, setErrorText] = useState('')
-  const [moodEntry, setMoodEntry] = useState<MoodEntry | null>(null)
-  const [quickMood, setQuickMood] = useState<number | null>(null)
-  const [quickReasons, setQuickReasons] = useState<string[]>([])
 
   async function load() {
     setBusy(true)
     setErrorText('')
     try {
-      const [{ tasks: loadedTasks }, subjectsResult, moodResult] = await Promise.all([
-        ensureTodayPlan(userId, profile),
-        supabase.from('subjects').select('*').eq('user_id', userId),
-        supabase.from('mood_entries').select('*').eq('user_id', userId).eq('entry_date', localDateKey()).maybeSingle(),
-      ])
-
-      setTasks(loadedTasks)
-      const map = Object.fromEntries((subjectsResult.data || []).map((subject) => [subject.id, subject]))
-      setSubjects(map)
-      setMoodEntry((moodResult.data as MoodEntry | null) || null)
-
-      if (loadedTasks.length) {
-        const resultRows = await supabase
-          .from('task_results')
-          .select('task_id, perceived_difficulty')
-          .eq('user_id', userId)
-          .in('task_id', loadedTasks.map((task) => task.id))
-        setResults(
-          Object.fromEntries((resultRows.data || []).map((row) => [row.task_id, row.perceived_difficulty])),
-        )
-      }
+      const data = await loadNavigationData(userId)
+      setSubjects(data.subjects)
+      setNodes(data.nodes)
+      setLogs(data.logs)
     } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'Не удалось собрать план')
+      setErrorText(error instanceof Error ? error.message : 'Не удалось собрать карту')
     } finally {
       setBusy(false)
     }
   }
 
-  useEffect(() => {
-    void load()
-  }, [userId])
+  useEffect(() => { void load() }, [userId])
 
-  const visibleTasks = useMemo(
-    () => tasks.filter((task) => taskVisibleAtTier(task.tier, tier)),
-    [tasks, tier],
-  )
+  const cards = useMemo(() => buildAttentionCards(subjects, nodes, logs), [subjects, nodes, logs])
+  const top = cards[0]
 
-  const totalMinutes = visibleTasks.reduce((sum, task) => sum + task.estimated_minutes, 0)
-  const doneCount = visibleTasks.filter((task) => task.status === 'done').length
-  const progress = visibleTasks.length ? Math.round((doneCount / visibleTasks.length) * 100) : 0
-
-  async function toggleTask(task: StudyTask) {
-    const done = task.status !== 'done'
-    const { error } = await supabase
-      .from('study_tasks')
-      .update({
-        status: done ? 'done' : 'planned',
-        completed_at: done ? new Date().toISOString() : null,
-      })
-      .eq('id', task.id)
-      .eq('user_id', userId)
-
-    if (error) {
-      setErrorText(error.message)
-      return
-    }
-
-    if (!done) {
-      await supabase.from('task_results').delete().eq('task_id', task.id).eq('user_id', userId)
-      setResults((current) => {
-        const next = { ...current }
-        delete next[task.id]
-        return next
-      })
-    }
-
-    setTasks((current) =>
-      current.map((item) =>
-        item.id === task.id
-          ? { ...item, status: done ? 'done' : 'planned', completed_at: done ? new Date().toISOString() : null }
-          : item,
-      ),
-    )
-  }
-
-  async function rateTask(task: StudyTask, value: number) {
-    const { error } = await supabase
-      .from('task_results')
-      .upsert(
-        {
-          user_id: userId,
-          task_id: task.id,
-          perceived_difficulty: value,
-        },
-        { onConflict: 'task_id' },
-      )
-
-    if (error) {
-      setErrorText(error.message)
-      return
-    }
-
-    if (task.topic_id) {
-      const topicResult = await supabase
-        .from('topics')
-        .select('mastery')
-        .eq('id', task.topic_id)
-        .eq('user_id', userId)
-        .single()
-
-      if (topicResult.data) {
-        const delta = value === 1 ? 4 : value === 2 ? 2 : value === 3 ? 1 : -2
-        const mastery = Math.max(0, Math.min(100, Number(topicResult.data.mastery) + delta))
-        await supabase
-          .from('topics')
-          .update({ mastery, last_practiced_at: new Date().toISOString() })
-          .eq('id', task.topic_id)
-          .eq('user_id', userId)
-      }
-    }
-
-    setResults((current) => ({ ...current, [task.id]: value }))
-  }
-
-  async function saveQuickMood() {
-    if (!quickMood) return
-    const { data, error } = await supabase
-      .from('mood_entries')
-      .upsert(
-        { user_id: userId, entry_date: localDateKey(), mood_value: quickMood },
-        { onConflict: 'user_id,entry_date' },
-      )
-      .select('*')
-      .single()
-
-    if (error) {
-      setErrorText(error.message)
-      return
-    }
-
-    await supabase.from('mood_entry_reasons').delete().eq('mood_entry_id', data.id).eq('user_id', userId)
-
-    if (quickReasons.length) {
-      const options = reasonsForMood(quickMood)
-      await supabase.from('mood_entry_reasons').insert(
-        quickReasons.map((key) => ({
-          user_id: userId,
-          mood_entry_id: data.id,
-          reason_key: key,
-          reason_label: options.find(([reasonKey]) => reasonKey === key)?.[1] || key,
-        })),
-      )
-    }
-
-    setMoodEntry(data as MoodEntry)
-  }
-
-  if (busy) {
-    return <PageLoader label="Собираю план на сегодня…" />
-  }
+  if (busy) return <LoadingScreen text="Собираем карту внимания…" />
 
   return (
     <div className="page">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">{new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(new Date()).toUpperCase()}</p>
-          <h1>Сегодня</h1>
-          <p className="muted">Не надо делать всё. Надо сделать следующий шаг.</p>
+          <p className="eyebrow">НАВИГАТОР</p>
+          <h1>Куда двигаться дальше</h1>
+          <p className="muted">Не «что ты обязан сделать сегодня», а какой следующий шаг сейчас разумнее.</p>
         </div>
-        <div className="progress-ring" style={{ '--progress': progress } as React.CSSProperties}>
-          <strong>{progress}%</strong>
-        </div>
+        <button className="secondary-button" onClick={() => setLogging((value) => !value)}><Plus size={17} /> Записать занятие</button>
       </section>
 
-      {!moodEntry && (
-        <section className="panel mood-quick">
-          <div className="section-title-row">
-            <div>
-              <p className="eyebrow">СОСТОЯНИЕ</p>
-              <h2>Как ты сегодня?</h2>
+      {logging && <StudyLogComposer userId={userId} subjects={subjects} nodes={nodes} onSaved={() => { setLogging(false); void load() }} />}
+
+      <section className="panel recommendation-card">
+        <div className="recommendation-top">
+          <div>
+            <p className="eyebrow">СЕЙЧАС РАЗУМНЕЕ</p>
+            <h2>{top ? `${top.subject.icon || '•'} ${top.subject.name}` : 'Собираем историю'}</h2>
+          </div>
+          <div className="duration-picker">
+            {[15, 30, 60].map((value) => <button key={value} className={duration === value ? 'active' : ''} onClick={() => setDuration(value)}>{value} мин</button>)}
+          </div>
+        </div>
+
+        {top ? (
+          <>
+            <p className="recommendation-action">{top.action}</p>
+            <p className="muted">{top.reason} На {duration} минут достаточно взять один понятный кусок, а не пытаться закрыть весь предмет.</p>
+            <div className="recommendation-meta">
+              <span><Clock3 size={15} /> {top.minutes} мин за 28 дней</span>
+              <span><BookOpen size={15} /> {top.currentNode ? statusLabels[top.currentNode.status] : 'маршрут закрыт'}</span>
             </div>
-          </div>
-          <div className="mood-row">
-            {MOODS.map((mood) => (
-              <button
-                key={mood.value}
-                className={'mood-button' + (quickMood === mood.value ? ' selected' : '')}
-                title={mood.label}
-                onClick={() => {
-                  setQuickMood(mood.value)
-                  setQuickReasons([])
-                }}
-              >
-                {mood.emoji}
-              </button>
-            ))}
-          </div>
+          </>
+        ) : <p className="muted">После первого записанного занятия Michi начнёт различать направления.</p>}
+      </section>
 
-          {quickMood && (
-            <>
-              <div className="chip-wrap compact">
-                {reasonsForMood(quickMood).map(([key, label]) => (
-                  <button
-                    key={key}
-                    className={'chip' + (quickReasons.includes(key) ? ' selected' : '')}
-                    onClick={() =>
-                      setQuickReasons((current) =>
-                        current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
-                      )
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <button className="secondary-button" onClick={saveQuickMood}>Сохранить настроение</button>
-            </>
-          )}
-        </section>
-      )}
-
-      <section className="tier-section">
-        <div className="segmented tier-picker">
-          {(['minimum', 'normal', 'boost'] as Tier[]).map((value) => (
-            <button key={value} className={tier === value ? 'active' : ''} onClick={() => setTier(value)}>
-              {tierLabels[value]}
-            </button>
+      <section>
+        <div className="section-heading">
+          <div><p className="eyebrow">ПОСЛЕДНИЕ 28 ДНЕЙ</p><h2>Карта внимания</h2></div>
+          <span className="muted tiny">ориентир, не квота</span>
+        </div>
+        <div className="attention-grid">
+          {cards.map((card) => (
+            <article className={`panel attention-card state-${card.state}`} key={card.subject.id}>
+              <div className="attention-title"><span className="subject-icon">{card.subject.icon || '•'}</span><div><strong>{card.subject.name}</strong><small>{card.reason}</small></div></div>
+              <div className="share-row"><strong>{Math.round(card.share * 100)}%</strong><span>{card.minutes} мин</span></div>
+              <div className="bar-track"><span style={{ width: `${Math.min(100, card.share * 100)}%` }} /></div>
+              <div className="reference-mark">справочный ориентир ≈ {Math.round(card.targetShare * 100)}%</div>
+              <div className="next-node"><span>Следующий узел</span><strong>{card.currentNode?.title || 'Смешанная практика'}</strong></div>
+            </article>
           ))}
         </div>
-        <p className="muted tiny">План на этот режим: примерно {totalMinutes} мин</p>
       </section>
 
-      <section className="task-list">
-        {visibleTasks.map((task) => {
-          const subject = task.subject_id ? subjects[task.subject_id] : undefined
-          const done = task.status === 'done'
-
-          return (
-            <article key={task.id} className={'task-card panel' + (done ? ' done' : '')}>
-              <button className={'task-check' + (done ? ' checked' : '')} onClick={() => toggleTask(task)}>
-                {done && <Check size={18} />}
-              </button>
-              <div className="task-main">
-                <div className="task-meta">
-                  <span className="subject-pill">{subject?.icon || '•'} {subject?.name || 'Учёба'}</span>
-                  <span>{task.estimated_minutes} мин</span>
-                </div>
-                <h3>{task.title}</h3>
-                <p>{task.description || 'Практика'}</p>
-
-                {done && !results[task.id] && (
-                  <div className="rating-block">
-                    <span>Как прошло?</span>
-                    <div className="rating-buttons">
-                      {difficultyLabels.map((option) => (
-                        <button key={option.value} onClick={() => rateTask(task, option.value)}>
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {results[task.id] && (
-                  <small className="success-text">
-                    Отмечено: {difficultyLabels.find((item) => item.value === results[task.id])?.label}
-                  </small>
-                )}
-              </div>
-            </article>
-          )
-        })}
+      <section className="panel anti-pressure-card">
+        <CheckCircle2 size={22} />
+        <div><strong>Ничего не потеряно, если ты не открыл Michi.</strong><p>Здесь нет серии дней. Через неделю приложение просто пересчитает картину по фактическим занятиям.</p></div>
       </section>
 
-      <section className="panel ai-nudge">
-        <Brain size={24} />
-        <div>
-          <strong>Переделать план с ИИ</strong>
-          <p>Скоро здесь можно будет написать: «я сегодня вообще не вывожу матешу».</p>
-        </div>
-        <NavLink className="icon-button" to="/tutor"><ChevronRight size={20} /></NavLink>
-      </section>
-
+      <NavLink className="panel ai-strip" to="/tutor"><Brain size={22} /><div><strong>ИИ-наставник</strong><span>Позже сможет разбирать ошибки и менять следующий шаг по контексту.</span></div><ChevronRight size={19} /></NavLink>
       {errorText && <p className="form-message error">{errorText}</p>}
     </div>
   )
 }
 
-function GoalsPage({ userId }: { userId: string }) {
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [subjects, setSubjects] = useState<Record<string, Subject>>({})
-  const [stages, setStages] = useState<any[]>([])
-  const [milestones, setMilestones] = useState<any[]>([])
-  const [busy, setBusy] = useState(true)
+function StudyLogComposer({ userId, subjects, nodes, onSaved }: { userId: string; subjects: Subject[]; nodes: LearningNode[]; onSaved: () => void }) {
+  const [subjectId, setSubjectId] = useState(subjects[0]?.id || '')
+  const [nodeId, setNodeId] = useState('')
+  const [minutes, setMinutes] = useState('30')
+  const [kind, setKind] = useState<keyof typeof activityLabels>('practice')
+  const [difficulty, setDifficulty] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [errorText, setErrorText] = useState('')
 
-  useEffect(() => {
-    async function load() {
-      const [goalResult, subjectResult, stageResult, milestoneResult] = await Promise.all([
-        supabase.from('goals').select('*').eq('user_id', userId).order('created_at'),
-        supabase.from('subjects').select('*').eq('user_id', userId),
-        supabase.from('goal_stages').select('*').eq('user_id', userId).order('sort_order'),
-        supabase.from('monthly_milestones').select('*').eq('user_id', userId).eq('month_start', monthStartKey()),
-      ])
-      setGoals((goalResult.data || []) as Goal[])
-      setSubjects(Object.fromEntries((subjectResult.data || []).map((subject) => [subject.id, subject])))
-      setStages(stageResult.data || [])
-      setMilestones(milestoneResult.data || [])
+  const subjectNodes = nodes.filter((node) => node.subject_id === subjectId)
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setErrorText('')
+    const parsedMinutes = Number(minutes)
+    if (!subjectId || !Number.isFinite(parsedMinutes) || parsedMinutes <= 0) {
+      setErrorText('Выбери предмет и нормальное время занятия.')
       setBusy(false)
+      return
     }
-    void load()
-  }, [userId])
 
-  if (busy) return <PageLoader label="Открываю большие цели…" />
+    const { error } = await supabase.from('study_logs').insert({
+      user_id: userId,
+      subject_id: subjectId,
+      learning_node_id: nodeId || null,
+      minutes: parsedMinutes,
+      activity_kind: kind,
+      perceived_difficulty: difficulty ? Number(difficulty) : null,
+      note: note || null,
+      source: 'manual',
+    })
+
+    setBusy(false)
+    if (error) {
+      setErrorText(error.message)
+      return
+    }
+    onSaved()
+  }
+
+  return (
+    <form className="panel log-composer" onSubmit={save}>
+      <div className="section-heading"><div><p className="eyebrow">ФАКТ, НЕ ПЛАН</p><h2>Чем ты реально занимался?</h2></div></div>
+      <div className="form-grid four">
+        <label><span>Направление</span><select value={subjectId} onChange={(event) => { setSubjectId(event.target.value); setNodeId('') }}>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.icon} {subject.name}</option>)}</select></label>
+        <label><span>Что именно</span><select value={nodeId} onChange={(event) => setNodeId(event.target.value)}><option value="">Без конкретного узла</option>{subjectNodes.map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}</select></label>
+        <label><span>Минуты</span><input inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value)} /></label>
+        <label><span>Тип</span><select value={kind} onChange={(event) => setKind(event.target.value as keyof typeof activityLabels)}>{Object.entries(activityLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+      </div>
+      <div className="form-grid two">
+        <label><span>Как шло — необязательно</span><select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}><option value="">Не отмечать</option><option value="1">Легко</option><option value="2">Нормально</option><option value="3">Тяжело</option><option value="4">Не понял</option></select></label>
+        <label><span>Заметка — необязательно</span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Например: разобрал №21, но код пока медленно" /></label>
+      </div>
+      <button className="primary-button" disabled={busy}>{busy ? 'Сохраняем…' : 'Записать занятие'}</button>
+      {errorText && <p className="form-message error">{errorText}</p>}
+    </form>
+  )
+}
+
+function RouteMapPage({ userId }: { userId: string }) {
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [nodes, setNodes] = useState<LearningNode[]>([])
+  const [busy, setBusy] = useState(true)
+  const [errorText, setErrorText] = useState('')
+
+  async function load() {
+    setBusy(true)
+    const data = await loadNavigationData(userId)
+    setSubjects(data.subjects)
+    setNodes(data.nodes)
+    setBusy(false)
+  }
+
+  useEffect(() => { void load().catch((error) => { setErrorText(error instanceof Error ? error.message : 'Ошибка'); setBusy(false) }) }, [userId])
+
+  async function changeStatus(node: LearningNode, status: LearningStatus) {
+    setNodes((current) => current.map((item) => item.id === node.id ? { ...item, status } : item))
+    const { error } = await supabase.from('learning_nodes').update({ status }).eq('id', node.id).eq('user_id', userId)
+    if (error) {
+      setErrorText(error.message)
+      void load()
+    }
+  }
+
+  if (busy) return <LoadingScreen text="Открываем карту знаний…" />
 
   return (
     <div className="page">
-      <section className="page-heading simple">
-        <div>
-          <p className="eyebrow">МАРШРУТ</p>
-          <h1>Большие цели</h1>
-          <p className="muted">Смотри сюда иногда. Каждый день важнее экран «Сегодня».</p>
-        </div>
-      </section>
-
-      <div className="goal-cards">
-        {goals.map((goal) => {
-          const subject = goal.subject_id ? subjects[goal.subject_id] : undefined
-          const goalStages = stages.filter((stage) => stage.goal_id === goal.id)
-          const milestone = milestones.find((item) => item.goal_id === goal.id)
-          const currentStage = goalStages.find((stage) => stage.status === 'active') || goalStages[0]
-
+      <section className="page-heading"><div><p className="eyebrow">КАРТА ЗНАНИЙ</p><h1>Что ты уже умеешь</h1><p className="muted">Если Michi ошибся в твоём уровне, просто поправь статус. Карта нужна для навигации, а не для оценки.</p></div></section>
+      <div className="route-stack">
+        {subjects.map((subject) => {
+          const subjectNodes = nodes.filter((node) => node.subject_id === subject.id)
+          const solid = subjectNodes.filter((node) => node.status === 'solid').length
           return (
-            <article className="goal-card panel" key={goal.id}>
-              <div className="goal-card-top">
-                <span className="subject-icon big">{subject?.icon || '•'}</span>
-                <div>
-                  <h2>{goal.title}</h2>
-                  {goal.target_date && <span className="muted tiny">Ориентир: {formatDateRu(goal.target_date)}</span>}
-                </div>
-              </div>
-              <p>{goal.description}</p>
-              <div className="goal-progress">
-                <div><span style={{ width: Number(goal.progress) + '%' }} /></div>
-                <strong>{Math.round(Number(goal.progress))}%</strong>
-              </div>
-              {currentStage && (
-                <div className="mini-section">
-                  <span className="eyebrow">ТЕКУЩИЙ ЭТАП</span>
-                  <strong>{currentStage.title}</strong>
-                </div>
-              )}
-              {milestone && (
-                <div className="milestone-box">
-                  <CalendarDays size={18} />
-                  <div>
-                    <span>Этот месяц</span>
-                    <strong>{milestone.title}</strong>
-                    <small>{milestone.description}</small>
+            <section className="panel route-card" key={subject.id}>
+              <div className="route-header"><div className="attention-title"><span className="subject-icon big">{subject.icon || '•'}</span><div><h2>{subject.name}</h2><span className="muted tiny">Закреплено узлов: {solid} из {subjectNodes.length}</span></div></div><span className="phase-badge">{phaseLabel(subject.learning_phase)}</span></div>
+              <div className="node-list">
+                {subjectNodes.map((node, index) => (
+                  <div className={`learning-node status-${node.status}`} key={node.id}>
+                    <span className="node-number">{index + 1}</span>
+                    <div className="node-copy"><strong>{node.title}</strong><span>{node.description}</span></div>
+                    <select value={node.status} onChange={(event) => void changeStatus(node, event.target.value as LearningStatus)}>{LEARNING_STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
                   </div>
-                </div>
-              )}
-            </article>
+                ))}
+              </div>
+            </section>
           )
         })}
       </div>
+      {errorText && <p className="form-message error">{errorText}</p>}
     </div>
   )
 }
 
-function MoodPage({ userId }: { userId: string }) {
-  const [cursor, setCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
-  const [entries, setEntries] = useState<Record<string, MoodEntry>>({})
-  const [reasonMap, setReasonMap] = useState<Record<string, string[]>>({})
-  const [selectedDate, setSelectedDate] = useState(localDateKey())
-  const [mood, setMood] = useState<number | null>(null)
-  const [reasons, setReasons] = useState<string[]>([])
+function phaseLabel(phase: Subject['learning_phase']) {
+  return ({ foundation: 'Фундамент', tools: 'Инструменты', exam_tasks: 'Задания', mixed: 'Смешанная практика', mock: 'Пробники' } as const)[phase]
+}
+
+function SavingsPage({ userId }: { userId: string }) {
+  const [goal, setGoal] = useState<SavingsGoal | null>(null)
+  const [transactions, setTransactions] = useState<SavingsTransaction[]>([])
+  const [received, setReceived] = useState('1000')
+  const [saved, setSaved] = useState('0')
+  const [source, setSource] = useState('Еженедельные деньги')
   const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(true)
   const [message, setMessage] = useState('')
 
-  const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
-  const nextMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
-  const firstKey = localDateKey(firstDay)
-  const nextKey = localDateKey(nextMonth)
-
-  async function loadMonth() {
-    const result = await supabase
-      .from('mood_entries')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('entry_date', firstKey)
-      .lt('entry_date', nextKey)
-      .order('entry_date')
-
-    const rows = (result.data || []) as MoodEntry[]
-    setEntries(Object.fromEntries(rows.map((entry) => [entry.entry_date, entry])))
-
-    if (rows.length) {
-      const reasonResult = await supabase
-        .from('mood_entry_reasons')
-        .select('mood_entry_id, reason_key')
-        .eq('user_id', userId)
-        .in('mood_entry_id', rows.map((entry) => entry.id))
-
-      const byEntry: Record<string, string[]> = {}
-      for (const row of reasonResult.data || []) {
-        if (!byEntry[row.mood_entry_id]) byEntry[row.mood_entry_id] = []
-        byEntry[row.mood_entry_id].push(row.reason_key)
-      }
-
-      const byDate: Record<string, string[]> = {}
-      for (const entry of rows) byDate[entry.entry_date] = byEntry[entry.id] || []
-      setReasonMap(byDate)
-    } else {
-      setReasonMap({})
-    }
+  async function load() {
+    setBusy(true)
+    const goalResult = await supabase.from('savings_goals').select('*').eq('user_id', userId).eq('is_active', true).single()
+    if (goalResult.error) throw goalResult.error
+    const txResult = await supabase.from('savings_transactions').select('*').eq('user_id', userId).eq('savings_goal_id', goalResult.data.id).order('occurred_on', { ascending: false }).order('created_at', { ascending: false })
+    if (txResult.error) throw txResult.error
+    setGoal(goalResult.data as SavingsGoal)
+    setTransactions((txResult.data || []) as SavingsTransaction[])
+    setBusy(false)
   }
 
-  useEffect(() => {
-    void loadMonth()
-  }, [userId, firstKey])
+  useEffect(() => { void load().catch((error) => { setMessage(error instanceof Error ? error.message : 'Ошибка'); setBusy(false) }) }, [userId])
 
-  useEffect(() => {
-    const entry = entries[selectedDate]
-    setMood(entry?.mood_value || null)
-    setNote(entry?.note || '')
-    setReasons(reasonMap[selectedDate] || [])
-  }, [selectedDate, entries, reasonMap])
+  const balance = transactions.reduce((sum, item) => sum + Number(item.saved_amount_rub || 0), 0)
+  const receivedTotal = transactions.reduce((sum, item) => sum + Number(item.received_amount_rub || 0), 0)
+  const estimatedJpy = goal?.reference_rub_per_jpy ? balance / Number(goal.reference_rub_per_jpy) : null
 
-  const days = useMemo(() => {
-    const count = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
-    const start = (firstDay.getDay() + 6) % 7
-    return [
-      ...Array.from({ length: start }, () => null),
-      ...Array.from({ length: count }, (_, index) => index + 1),
-    ]
-  }, [cursor.getFullYear(), cursor.getMonth()])
-
-  async function save() {
-    if (!mood) return
-    setMessage('')
-
-    const { data, error } = await supabase
-      .from('mood_entries')
-      .upsert(
-        { user_id: userId, entry_date: selectedDate, mood_value: mood, note: note || null },
-        { onConflict: 'user_id,entry_date' },
-      )
-      .select('*')
-      .single()
-
+  async function addTransaction(event: FormEvent) {
+    event.preventDefault()
+    if (!goal) return
+    const got = received.trim() === '' ? null : Number(received)
+    const putAway = Number(saved || 0)
+    if ((!got || got <= 0) && putAway === 0) {
+      setMessage('Нужно указать либо поступление, либо изменение сбережений.')
+      return
+    }
+    const { error } = await supabase.from('savings_transactions').insert({
+      user_id: userId,
+      savings_goal_id: goal.id,
+      received_amount_rub: got,
+      saved_amount_rub: putAway,
+      source: source || null,
+      note: note || null,
+      occurred_on: localDateKey(),
+    })
     if (error) {
       setMessage(error.message)
       return
     }
-
-    await supabase.from('mood_entry_reasons').delete().eq('mood_entry_id', data.id).eq('user_id', userId)
-
-    if (reasons.length) {
-      const options = reasonsForMood(mood)
-      await supabase.from('mood_entry_reasons').insert(
-        reasons.map((key) => ({
-          user_id: userId,
-          mood_entry_id: data.id,
-          reason_key: key,
-          reason_label: options.find(([reasonKey]) => reasonKey === key)?.[1] || key,
-        })),
-      )
-    }
-
-    setMessage('Сохранено')
-    await loadMonth()
+    setMessage(putAway === 0 ? 'Записано. Ноль отложенных рублей — тоже нормальный выбор.' : 'Записано.')
+    setNote('')
+    await load()
   }
 
-  function chooseDate(day: number) {
-    setSelectedDate(localDateKey(new Date(cursor.getFullYear(), cursor.getMonth(), day)))
-    setMessage('')
+  async function saveRate(value: string) {
+    if (!goal) return
+    const rate = value.trim() ? Number(value) : null
+    const { error } = await supabase.from('savings_goals').update({ reference_rub_per_jpy: rate }).eq('id', goal.id).eq('user_id', userId)
+    if (!error) setGoal({ ...goal, reference_rub_per_jpy: rate })
   }
+
+  if (busy) return <LoadingScreen text="Считаем реальные сбережения…" />
 
   return (
     <div className="page">
-      <section className="page-heading simple">
-        <div>
-          <p className="eyebrow">КАЛЕНДАРЬ</p>
-          <h1>Настроение</h1>
-          <p className="muted">Отмечай состояние без оценок. Позже мы посмотрим, что реально влияет на учёбу.</p>
-        </div>
+      <section className="page-heading"><div><p className="eyebrow">ДОЛГАЯ ЦЕЛЬ</p><h1>Сбережения на Японию</h1><p className="muted">Цель — ¥{formatNumber(goal?.target_amount_jpy || 2400000)}. Никакой обязательной суммы раз в неделю.</p></div></section>
+
+      <section className="savings-hero panel">
+        <div><span>Сейчас отложено</span><strong>{formatRub(balance)}</strong>{estimatedJpy !== null && <small>≈ ¥{formatNumber(Math.round(estimatedJpy))} по справочному курсу</small>}</div>
+        <div><span>Всего записано поступлений</span><strong>{formatRub(receivedTotal)}</strong><small>Это не «должно было уйти в копилку».</small></div>
       </section>
 
-      <section className="panel calendar-card">
-        <div className="calendar-head">
-          <button className="icon-button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>
-            <ChevronLeft size={20} />
-          </button>
-          <strong>{new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(cursor)}</strong>
-          <button className="icon-button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>
-            <ChevronRight size={20} />
-          </button>
+      <form className="panel savings-form" onSubmit={addTransaction}>
+        <div className="section-heading"><div><p className="eyebrow">НОВОЕ ПОСТУПЛЕНИЕ</p><h2>Сколько реально хочешь отложить?</h2></div></div>
+        <div className="form-grid three">
+          <label><span>Получил, ₽</span><input inputMode="decimal" value={received} onChange={(event) => setReceived(event.target.value)} /></label>
+          <label><span>В сбережения, ₽</span><input inputMode="decimal" value={saved} onChange={(event) => setSaved(event.target.value)} /></label>
+          <label><span>Откуда</span><input value={source} onChange={(event) => setSource(event.target.value)} /></label>
         </div>
-        <div className="calendar-weekdays">
-          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => <span key={day}>{day}</span>)}
-        </div>
-        <div className="calendar-grid">
-          {days.map((day, index) => {
-            if (!day) return <span className="calendar-empty" key={'e' + index} />
-            const key = localDateKey(new Date(cursor.getFullYear(), cursor.getMonth(), day))
-            const entry = entries[key]
-            const moodInfo = entry ? MOODS.find((item) => item.value === entry.mood_value) : null
-            return (
-              <button
-                key={key}
-                className={'calendar-day' + (selectedDate === key ? ' selected' : '')}
-                onClick={() => chooseDate(day)}
-              >
-                <span>{day}</span>
-                <strong>{moodInfo?.emoji || '·'}</strong>
-              </button>
-            )
-          })}
-        </div>
+        <div className="quick-money-row">{[0, 200, 500, 1000].map((value) => <button type="button" key={value} className={Number(saved) === value ? 'active' : ''} onClick={() => setSaved(String(value))}>{value === 0 ? 'Ничего' : `${value} ₽`}</button>)}</div>
+        <label><span>Заметка — необязательно</span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Например: подарок на день рождения" /></label>
+        <button className="primary-button">Записать</button>
+        {message && <p className="form-message success">{message}</p>}
+      </form>
+
+      <section className="panel rate-card">
+        <div><strong>Оценка в иенах</strong><span>Автоматический курс добавим позже. Пока можно указать свой справочный курс, если хочешь видеть примерную сумму.</span></div>
+        <label><span>1 ¥ ≈ сколько ₽</span><input type="number" min="0" step="0.0001" defaultValue={goal?.reference_rub_per_jpy || ''} onBlur={(event) => void saveRate(event.target.value)} placeholder="необязательно" /></label>
       </section>
 
-      <section className="panel mood-editor">
-        <p className="eyebrow">{formatDateRu(selectedDate).toUpperCase()}</p>
-        <h2>Как прошёл день?</h2>
-        <div className="mood-row">
-          {MOODS.map((item) => (
-            <button
-              key={item.value}
-              title={item.label}
-              className={'mood-button' + (mood === item.value ? ' selected' : '')}
-              onClick={() => {
-                setMood(item.value)
-                setReasons([])
-              }}
-            >
-              {item.emoji}
-            </button>
+      <section>
+        <div className="section-heading"><div><p className="eyebrow">ИСТОРИЯ</p><h2>Движение денег</h2></div></div>
+        <div className="transaction-list">
+          {transactions.length === 0 && <div className="panel empty-state">Пока пусто. Первую запись можно сделать хоть с 0 ₽ в сбережения.</div>}
+          {transactions.map((item) => (
+            <article className="panel transaction-row" key={item.id}>
+              <div><strong>{item.source || 'Поступление'}</strong><span>{formatDateRu(item.occurred_on)}{item.received_amount_rub !== null ? ` · получил ${formatRub(Number(item.received_amount_rub))}` : ''}</span>{item.note && <small>{item.note}</small>}</div>
+              <strong className={Number(item.saved_amount_rub) >= 0 ? 'money-positive' : 'money-negative'}>{Number(item.saved_amount_rub) >= 0 ? '+' : ''}{formatRub(Number(item.saved_amount_rub))}</strong>
+            </article>
           ))}
         </div>
-
-        {mood && (
-          <>
-            <h3>Почему так?</h3>
-            <div className="chip-wrap">
-              {reasonsForMood(mood).map(([key, label]) => (
-                <button
-                  key={key}
-                  className={'chip' + (reasons.includes(key) ? ' selected' : '')}
-                  onClick={() =>
-                    setReasons((current) =>
-                      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
-                    )
-                  }
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <label>
-              <span>Заметка — необязательно</span>
-              <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Что сегодня произошло?" rows={3} />
-            </label>
-            <button className="primary-button" onClick={save}>Сохранить день</button>
-            {message && <span className="success-text">{message}</span>}
-          </>
-        )}
       </section>
     </div>
   )
 }
 
 function ProgressPage({ userId }: { userId: string }) {
-  const [topics, setTopics] = useState<Topic[]>([])
-  const [tasks, setTasks] = useState<StudyTask[]>([])
-  const [moods, setMoods] = useState<MoodEntry[]>([])
-  const [plans, setPlans] = useState<any[]>([])
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [nodes, setNodes] = useState<LearningNode[]>([])
+  const [logs, setLogs] = useState<StudyLog[]>([])
+  const [savings, setSavings] = useState(0)
   const [busy, setBusy] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const start = new Date()
-      start.setDate(start.getDate() - 13)
-      const startKey = localDateKey(start)
-
-      const [topicResult, planResult, moodResult] = await Promise.all([
-        supabase.from('topics').select('*').eq('user_id', userId).eq('is_active', true),
-        supabase.from('daily_plans').select('*').eq('user_id', userId).gte('plan_date', startKey).order('plan_date'),
-        supabase.from('mood_entries').select('*').eq('user_id', userId).gte('entry_date', startKey).order('entry_date'),
-      ])
-
-      const loadedPlans = planResult.data || []
-      let loadedTasks: StudyTask[] = []
-      if (loadedPlans.length) {
-        const taskResult = await supabase
-          .from('study_tasks')
-          .select('*')
-          .eq('user_id', userId)
-          .in('daily_plan_id', loadedPlans.map((plan) => plan.id))
-        loadedTasks = (taskResult.data || []) as StudyTask[]
-      }
-
-      setTopics((topicResult.data || []) as Topic[])
-      setPlans(loadedPlans)
-      setTasks(loadedTasks)
-      setMoods((moodResult.data || []) as MoodEntry[])
+      const data = await loadNavigationData(userId)
+      const tx = await supabase.from('savings_transactions').select('saved_amount_rub').eq('user_id', userId)
+      setSubjects(data.subjects)
+      setNodes(data.nodes)
+      setLogs(data.logs)
+      setSavings((tx.data || []).reduce((sum, row) => sum + Number(row.saved_amount_rub || 0), 0))
       setBusy(false)
     }
     void load()
   }, [userId])
 
-  if (busy) return <PageLoader label="Собираю статистику…" />
+  if (busy) return <LoadingScreen text="Собираем общую картину…" />
 
-  const doneTasks = tasks.filter((task) => task.status === 'done')
-  const minutes = doneTasks.reduce((sum, task) => sum + task.estimated_minutes, 0)
-  const completedPercent = tasks.length ? Math.round((doneTasks.length / tasks.length) * 100) : 0
-  const activeDays = new Set(
-    doneTasks
-      .map((task) => plans.find((plan) => plan.id === task.daily_plan_id)?.plan_date)
-      .filter(Boolean),
-  ).size
-  const moodAverage = moods.length
-    ? moods.reduce((sum, entry) => sum + entry.mood_value, 0) / moods.length
-    : 0
-  const weakest = [...topics].sort((a, b) => Number(a.mastery) - Number(b.mastery)).slice(0, 5)
+  const cards = buildAttentionCards(subjects, nodes, logs)
+  const totalMinutes = logs.reduce((sum, log) => sum + Number(log.minutes), 0)
+  const studyDays = new Set(logs.map((log) => localDateKey(new Date(log.occurred_at)))).size
+  const touched = cards.filter((card) => card.minutes > 0).length
+  const dominant = [...cards].sort((a, b) => b.share - a.share)[0]
 
   return (
     <div className="page">
-      <section className="page-heading simple">
-        <div>
-          <p className="eyebrow">ПОСЛЕДНИЕ 14 ДНЕЙ</p>
-          <h1>Прогресс</h1>
-          <p className="muted">Не серия дней, а то, насколько устойчиво ты двигаешься.</p>
-        </div>
-      </section>
+      <section className="page-heading"><div><p className="eyebrow">ПОСЛЕДНИЕ 28 ДНЕЙ</p><h1>Общая картина</h1><p className="muted">Не серия и не оценка дисциплины. Просто факты, чтобы заметить перекос раньше, чем пройдёт год.</p></div></section>
+      <div className="stats-grid"><Stat value={`${Math.round(totalMinutes / 60 * 10) / 10} ч`} label="занятий" /><Stat value={String(studyDays)} label="дней с учёбой" /><Stat value={`${touched}/${subjects.length}`} label="направлений трогал" /><Stat value={formatRub(savings)} label="в сбережениях" /></div>
 
-      <div className="stats-grid">
-        <StatCard value={String(activeDays)} label="учебных дней" />
-        <StatCard value={minutes + ' мин'} label="выполнено" />
-        <StatCard value={completedPercent + '%'} label="плана закрыто" />
-        <StatCard
-          value={moodAverage ? (MOODS.find((item) => item.value === Math.round(moodAverage))?.emoji || '😐') : '—'}
-          label="среднее настроение"
-        />
-      </div>
+      {dominant && totalMinutes > 0 && (
+        <section className="panel insight-card"><Sparkles size={22} /><div><strong>{dominant.subject.name}: {Math.round(dominant.share * 100)}% учебного времени</strong><p>{dominant.share > 0.55 ? 'Это уже заметный перекос. Не ошибка — просто сигнал проверить, не обходишь ли ты другие важные направления.' : 'Пока один предмет не съедает почти всю подготовку.'}</p></div></section>
+      )}
 
-      <section className="panel">
-        <div className="section-title-row">
-          <div>
-            <p className="eyebrow">КУДА СМОТРЕТЬ</p>
-            <h2>Слабые темы</h2>
-          </div>
-        </div>
-        <div className="mastery-list">
-          {weakest.map((topic) => (
-            <div className="mastery-row" key={topic.id}>
-              <div>
-                <strong>{topic.name}</strong>
-                <span>{Math.round(Number(topic.mastery))}%</span>
-              </div>
-              <div className="mastery-track">
-                <span style={{ width: Number(topic.mastery) + '%' }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel insight-card">
-        <Sparkles size={22} />
-        <div>
-          <strong>Позже здесь появятся закономерности</strong>
-          <p>
-            Например: «в дни после плохого сна ты чаще выбираешь минимум» — без медицинских выводов и без давления.
-          </p>
-        </div>
+      <section className="panel distribution-card">
+        <div className="section-heading"><div><p className="eyebrow">РАСПРЕДЕЛЕНИЕ</p><h2>Куда ушло время</h2></div></div>
+        <div className="distribution-list">{cards.sort((a, b) => b.minutes - a.minutes).map((card) => <div className="distribution-row" key={card.subject.id}><div><strong>{card.subject.icon} {card.subject.name}</strong><span>{card.minutes} мин · {Math.round(card.share * 100)}%</span></div><div className="bar-track"><span style={{ width: `${Math.min(100, card.share * 100)}%` }} /></div></div>)}</div>
       </section>
     </div>
   )
 }
 
-function StatCard({ value, label }: { value: string; label: string }) {
+function Stat({ value, label }: { value: string; label: string }) {
+  return <article className="panel stat-card"><strong>{value}</strong><span>{label}</span></article>
+}
+
+function MoodPage({ userId }: { userId: string }) {
+  const [cursor, setCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+  const [entries, setEntries] = useState<Record<string, MoodEntry>>({})
+  const [selectedDate, setSelectedDate] = useState(localDateKey())
+  const [mood, setMood] = useState<number | null>(null)
+  const [reasons, setReasons] = useState<string[]>([])
+  const [note, setNote] = useState('')
+  const [message, setMessage] = useState('')
+
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
+  const next = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+  const firstKey = localDateKey(first)
+  const nextKey = localDateKey(next)
+
+  async function loadMonth() {
+    const result = await supabase.from('mood_entries').select('*').eq('user_id', userId).gte('entry_date', firstKey).lt('entry_date', nextKey)
+    const rows = (result.data || []) as MoodEntry[]
+    setEntries(Object.fromEntries(rows.map((entry) => [entry.entry_date, entry])))
+  }
+
+  useEffect(() => { void loadMonth() }, [userId, firstKey])
+  useEffect(() => { const entry = entries[selectedDate]; setMood(entry?.mood_value || null); setNote(entry?.note || ''); setReasons([]) }, [selectedDate, entries])
+
+  const calendarDays = useMemo(() => {
+    const count = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
+    const blanks = (first.getDay() + 6) % 7
+    return [...Array.from({ length: blanks }, () => null), ...Array.from({ length: count }, (_, index) => index + 1)]
+  }, [cursor.getFullYear(), cursor.getMonth()])
+
+  async function save() {
+    if (!mood) return
+    const { data, error } = await supabase.from('mood_entries').upsert({ user_id: userId, entry_date: selectedDate, mood_value: mood, note: note || null }, { onConflict: 'user_id,entry_date' }).select('*').single()
+    if (error) { setMessage(error.message); return }
+    await supabase.from('mood_entry_reasons').delete().eq('mood_entry_id', data.id).eq('user_id', userId)
+    if (reasons.length) {
+      const options = reasonsForMood(mood)
+      await supabase.from('mood_entry_reasons').insert(reasons.map((key) => ({ user_id: userId, mood_entry_id: data.id, reason_key: key, reason_label: options.find(([reasonKey]) => reasonKey === key)?.[1] || key })))
+    }
+    setMessage('Сохранено. И да — завтра отмечать необязательно.')
+    await loadMonth()
+  }
+
   return (
-    <article className="stat-card panel">
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </article>
+    <div className="page">
+      <section className="page-heading"><div><p className="eyebrow">НЕОБЯЗАТЕЛЬНО</p><h1>Настроение</h1><p className="muted">Отмечай только когда хочется оставить контекст. Пустой день ничего не портит.</p></div></section>
+      <section className="panel calendar-card">
+        <div className="calendar-head"><button className="icon-button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}><ChevronLeft size={19} /></button><strong>{new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(cursor)}</strong><button className="icon-button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}><ChevronRight size={19} /></button></div>
+        <div className="calendar-weekdays">{['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => <span key={day}>{day}</span>)}</div>
+        <div className="calendar-grid">{calendarDays.map((day, index) => {
+          if (!day) return <span className="calendar-empty" key={`empty-${index}`} />
+          const key = localDateKey(new Date(cursor.getFullYear(), cursor.getMonth(), day))
+          const entry = entries[key]
+          return <button key={key} className={`calendar-day ${selectedDate === key ? 'selected' : ''}`} onClick={() => setSelectedDate(key)}><span>{day}</span><strong>{entry ? MOODS.find((item) => item.value === entry.mood_value)?.emoji : '·'}</strong></button>
+        })}</div>
+      </section>
+      <section className="panel mood-editor"><p className="eyebrow">{formatDateRu(selectedDate).toUpperCase()}</p><h2>Если хочешь — оставь отметку</h2><div className="mood-row">{MOODS.map((item) => <button key={item.value} className={`mood-button ${mood === item.value ? 'selected' : ''}`} onClick={() => { setMood(item.value); setReasons([]) }}>{item.emoji}</button>)}</div>{mood && <><div className="chip-wrap">{reasonsForMood(mood).map(([key, label]) => <button key={key} className={`chip ${reasons.includes(key) ? 'selected' : ''}`} onClick={() => setReasons((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])}>{label}</button>)}</div><label><span>Заметка</span><textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} /></label><button className="primary-button" onClick={() => void save()}>Сохранить</button></>}{message && <p className="form-message success">{message}</p>}</section>
+    </div>
   )
 }
 
 function TutorPage({ profile }: { profile: Profile }) {
   return (
     <div className="page">
-      <section className="page-heading simple">
-        <div>
-          <p className="eyebrow">ИИ-НАСТАВНИК</p>
-          <h1>Репетитор Michi</h1>
-          <p className="muted">AI-слой уже заложен в базу и настройки. Следом подключим GigaChat.</p>
-        </div>
-      </section>
-
-      <section className="panel tutor-hero">
-        <div className="tutor-orb"><Brain size={34} /></div>
-        <div>
-          <span className="status-badge">Провайдер: {profile.ai_provider === 'gigachat' ? 'GigaChat' : profile.ai_provider}</span>
-          <h2>Пока без API-ключа</h2>
-          <p>
-            Когда подключим GigaChat, здесь можно будет просить объяснить ошибку, создать мини-тест или провести занятие на 30 минут.
-          </p>
-        </div>
-      </section>
-
-      <div className="prompt-grid">
-        {[
-          ['Объясни ошибку', 'Покажет, где сломалась логика, и даст похожую задачу.'],
-          ['Сделай мини-тест', 'Соберёт вопросы по конкретной теме и твоим слабым местам.'],
-          ['Переделай сегодня', 'Упростит или переставит план, если сил мало.'],
-          ['Позанимайся со мной', 'Пошаговая сессия: задача → ответ → объяснение → следующая сложность.'],
-        ].map(([title, text]) => (
-          <article className="panel prompt-card" key={title}>
-            <Sparkles size={18} />
-            <strong>{title}</strong>
-            <p>{text}</p>
-          </article>
-        ))}
-      </div>
+      <section className="page-heading"><div><p className="eyebrow">ИИ-НАСТАВНИК</p><h1>Помощник, а не диспетчер</h1><p className="muted">Он будет объяснять ошибки, делать мини-тесты и помогать выбрать следующий узел. Решение заниматься всё равно остаётся твоим.</p></div></section>
+      <section className="panel tutor-card"><Brain size={34} /><div><span className="status-badge">Провайдер: {profile.ai_provider}</span><h2>AI-слой готов к подключению модели</h2><p>GigaChat остаётся первым провайдером, OpenAI можно будет добавить позже через тот же интерфейс.</p></div></section>
     </div>
   )
 }
 
-function SettingsPage({
-  profile,
-  reloadProfile,
-}: {
-  profile: Profile
-  reloadProfile: () => Promise<void>
-}) {
+function SettingsPage({ userId, profile, reloadProfile }: { userId: string; profile: Profile; reloadProfile: () => Promise<void> }) {
   const [name, setName] = useState(profile.display_name || '')
-  const [light, setLight] = useState(profile.daily_minutes_light)
-  const [normal, setNormal] = useState(profile.daily_minutes_normal)
-  const [boost, setBoost] = useState(profile.daily_minutes_boost)
   const [provider, setProvider] = useState(profile.ai_provider)
+  const [subjects, setSubjects] = useState<Subject[]>([])
   const [message, setMessage] = useState('')
 
-  async function save() {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        display_name: name,
-        daily_minutes_light: light,
-        daily_minutes_normal: normal,
-        daily_minutes_boost: boost,
-        ai_provider: provider,
-      })
-      .eq('id', profile.id)
+  useEffect(() => { void supabase.from('subjects').select('*').eq('user_id', userId).order('sort_order').then(({ data }) => setSubjects((data || []) as Subject[])) }, [userId])
 
-    setMessage(error ? error.message : 'Настройки сохранены')
-    if (!error) await reloadProfile()
+  async function save() {
+    setMessage('')
+    const { error } = await supabase.from('profiles').update({ display_name: name, ai_provider: provider }).eq('id', profile.id)
+    if (error) { setMessage(error.message); return }
+    for (const subject of subjects) {
+      const result = await supabase.from('subjects').update({ attention_weight: subject.attention_weight, recommended_gap_days: subject.recommended_gap_days }).eq('id', subject.id).eq('user_id', userId)
+      if (result.error) { setMessage(result.error.message); return }
+    }
+    setMessage('Сохранено')
+    await reloadProfile()
   }
 
   return (
     <div className="page">
-      <section className="page-heading simple">
-        <div>
-          <p className="eyebrow">MICHI</p>
-          <h1>Настройки</h1>
-        </div>
-      </section>
-
-      <section className="panel settings-section">
-        <h2>Профиль</h2>
-        <label>
-          <span>Имя или ник</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} />
-        </label>
-
-        <h3>Нагрузка</h3>
-        <div className="time-budget-grid">
-          <TimeBudget label="Минимум" value={light} onChange={setLight} hint="тяжёлый день" />
-          <TimeBudget label="Норма" value={normal} onChange={setNormal} hint="обычный день" />
-          <TimeBudget label="Усиленный" value={boost} onChange={setBoost} hint="когда есть силы" />
-        </div>
-
-        <h3>ИИ-провайдер</h3>
-        <select value={provider} onChange={(event) => setProvider(event.target.value as Profile['ai_provider'])}>
-          <option value="gigachat">GigaChat — основной</option>
-          <option value="openai">OpenAI — позже</option>
-          <option value="auto">Автоматически — позже</option>
-        </select>
-        <p className="muted tiny">Ключи API будут храниться только на серверной стороне, не в браузере.</p>
-
-        <button className="primary-button" onClick={save}>Сохранить</button>
-        {message && <span className="success-text">{message}</span>}
-      </section>
-
-      <section className="panel danger-zone">
-        <div>
-          <strong>Выйти из аккаунта</strong>
-          <span className="muted tiny">Данные останутся в Supabase.</span>
-        </div>
-        <button className="secondary-button" onClick={() => supabase.auth.signOut()}>
-          <LogOut size={18} /> Выйти
-        </button>
-      </section>
+      <section className="page-heading"><div><p className="eyebrow">НАСТРОЙКИ</p><h1>Michi под тебя</h1></div></section>
+      <section className="panel settings-card"><label><span>Имя или ник</span><input value={name} onChange={(event) => setName(event.target.value)} /></label><label><span>ИИ-провайдер</span><select value={provider} onChange={(event) => setProvider(event.target.value as Profile['ai_provider'])}><option value="gigachat">GigaChat</option><option value="openai">OpenAI — позже</option><option value="auto">Автоматически — позже</option></select></label></section>
+      <section className="panel settings-card"><div><p className="eyebrow">КАРТА ВНИМАНИЯ</p><h2>Насколько важны направления сейчас</h2><p className="muted tiny">Это не проценты и не обязательные часы. Вес только помогает Michi замечать долгий перекос.</p></div>{subjects.map((subject, index) => <div className="weight-row" key={subject.id}><div><strong>{subject.icon} {subject.name}</strong><span>Вес {subject.attention_weight} · напомнить о перекосе примерно после {subject.recommended_gap_days} дней без занятий</span></div><div><input type="range" min="1" max="5" value={subject.attention_weight} onChange={(event) => setSubjects((current) => current.map((item, i) => i === index ? { ...item, attention_weight: Number(event.target.value) } : item))} /><input className="gap-input" type="number" min="1" max="30" value={subject.recommended_gap_days} onChange={(event) => setSubjects((current) => current.map((item, i) => i === index ? { ...item, recommended_gap_days: Number(event.target.value) } : item))} /></div></div>)}</section>
+      <button className="primary-button" onClick={() => void save()}>Сохранить настройки</button>{message && <p className="form-message success">{message}</p>}
+      <section className="panel logout-card"><div><strong>Выйти из аккаунта</strong><span className="muted tiny">Данные останутся в Supabase.</span></div><button className="secondary-button" onClick={() => void supabase.auth.signOut()}><LogOut size={17} /> Выйти</button></section>
     </div>
   )
 }
 
-function PageLoader({ label }: { label: string }) {
-  return (
-    <div className="page-loader">
-      <LoaderCircle className="spin" size={24} />
-      <span>{label}</span>
-    </div>
-  )
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)
+}
+
+function formatRub(value: number) {
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
 }
 
 function AuthenticatedApp({ session }: { session: Session }) {
@@ -1234,31 +707,26 @@ function AuthenticatedApp({ session }: { session: Session }) {
 
   async function loadProfile() {
     setBusy(true)
+    setErrorText('')
     const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
-    if (error) setErrorText(error.message)
-    setProfile((data as Profile | null) || null)
+    if (error) { setErrorText(error.message); setBusy(false); return }
+    if (!data) { setBusy(false); return }
+
+    try {
+      await ensureWorkspace(session.user.id)
+    } catch (workspaceError) {
+      setErrorText(workspaceError instanceof Error ? workspaceError.message : 'Не удалось подготовить пространство Michi')
+    }
+
+    setProfile(data as Profile)
     setBusy(false)
   }
 
-  useEffect(() => {
-    void loadProfile()
-  }, [session.user.id])
+  useEffect(() => { void loadProfile() }, [session.user.id])
 
-  if (busy) return <LoadingScreen />
-
-  if (!profile) {
-    return (
-      <div className="center-screen">
-        <h2>Профиль ещё не появился</h2>
-        <p className="muted">{errorText || 'Попробуй выйти и войти снова.'}</p>
-        <button className="secondary-button" onClick={() => supabase.auth.signOut()}>Выйти</button>
-      </div>
-    )
-  }
-
-  if (!profile.onboarding_completed) {
-    return <OnboardingPage userId={session.user.id} profile={profile} onDone={() => void loadProfile()} />
-  }
+  if (busy) return <LoadingScreen text="Готовим твой маршрут…" />
+  if (!profile) return <div className="center-screen"><h2>Профиль ещё не появился</h2><p className="muted">{errorText || 'Попробуй выйти и войти снова.'}</p><button className="secondary-button" onClick={() => void supabase.auth.signOut()}>Выйти</button></div>
+  if (!profile.onboarding_completed) return <OnboardingPage profile={profile} onDone={() => void loadProfile()} />
 
   return <AppShell userId={session.user.id} profile={profile} reloadProfile={loadProfile} />
 }
@@ -1268,9 +736,7 @@ export default function App() {
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-    })
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
     return () => data.subscription.unsubscribe()
   }, [])
 
