@@ -47,7 +47,7 @@ export function buildSavingsAdvice(
 
   let recommendedSaveRatio = baseRatio
   if (reserveGap > 0) {
-    recommendedSaveRatio = Math.max(baseRatio, 0.7)
+    recommendedSaveRatio = Math.max(baseRatio, 0.6)
   } else if (peak >= 2000 && drawdown >= Math.max(1000, peak * 0.15)) {
     recommendedSaveRatio = Math.max(baseRatio, 0.6)
   } else if (recentReceived >= 1000 && recentSaveRatio !== null && recentSaveRatio < baseRatio * 0.6) {
@@ -58,8 +58,21 @@ export function buildSavingsAdvice(
 
   const income = Math.max(0, Number(nextIncomeRub || 0))
   let recommendedFromNextIncome = roundRecommendation(income * recommendedSaveRatio)
+
   if (reserveGap > 0 && income > 0) {
-    recommendedFromNextIncome = Math.min(income, Math.max(recommendedFromNextIncome, roundRecommendation(Math.min(reserveGap, income))))
+    const baseAmount = income * baseRatio
+    let recoveryTarget = baseAmount
+
+    if (reserveGap <= income * 0.25) {
+      recoveryTarget = Math.max(baseAmount, reserveGap)
+    } else if (reserveGap <= income) {
+      recoveryTarget = Math.max(income * 0.55, Math.min(reserveGap, income * 0.65))
+    } else {
+      recoveryTarget = income * 0.7
+    }
+
+    recommendedFromNextIncome = roundRecommendation(Math.min(income * 0.75, recoveryTarget))
+    recommendedSaveRatio = recommendedFromNextIncome / income
   }
 
   let state: SavingsAdvice['state'] = 'building'
@@ -69,7 +82,7 @@ export function buildSavingsAdvice(
   if (reserveGap > 0) {
     state = 'recovering'
     headline = `Защитный запас просел на ${Math.round(reserveGap).toLocaleString('ru-RU')} ₽`
-    detail = 'Следующее поступление лучше частично направить на восстановление запаса. Это рекомендация, а не обязательный платёж.'
+    detail = 'Следующее поступление лучше заметно сильнее направить в запас, но закрывать всю разницу одним разом не нужно. Это ориентир, а не обязательный платёж.'
   } else if (effectiveFloor > 0) {
     state = 'protected'
     if (freeToSpend > 0) {
