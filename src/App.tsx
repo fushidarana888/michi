@@ -21,6 +21,7 @@ import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { LEARNING_STATUS_OPTIONS, MOODS, reasonsForMood } from './data/presets'
 import { formatDateRu, localDateKey } from './lib/date'
 import { buildAttentionCards, ensureWorkspace, loadNavigationData } from './lib/navigation'
+import { SavingsPageV2 } from './pages/SavingsPageV2'
 import { supabase } from './lib/supabase'
 import type {
   LearningNode,
@@ -193,7 +194,7 @@ function AppShell({ userId, profile, reloadProfile }: { userId: string; profile:
         <Routes>
           <Route path="/navigate" element={<NavigatorPage userId={userId} />} />
           <Route path="/route" element={<RouteMapPage userId={userId} />} />
-          <Route path="/savings" element={<SavingsPage userId={userId} />} />
+          <Route path="/savings" element={<SavingsPageV2 userId={userId} />} />
           <Route path="/progress" element={<ProgressPage userId={userId} />} />
           <Route path="/mood" element={<MoodPage userId={userId} />} />
           <Route path="/tutor" element={<TutorPage profile={profile} />} />
