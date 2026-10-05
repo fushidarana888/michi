@@ -84,6 +84,9 @@ export interface SavingsGoal {
   target_amount_jpy: number
   target_date: string | null
   reference_rub_per_jpy: number | null
+  protected_floor_rub: number
+  auto_floor_ratio: number
+  base_save_ratio: number
   is_active: boolean
 }
 
