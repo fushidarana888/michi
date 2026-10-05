@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Copy, RefreshCw } from 'lucide-react'
 import './AnkiConnectionHelpPortal.css'
 
 export function AnkiConnectionHelpPortal() {
   const [target, setTarget] = useState<HTMLElement | null>(null)
   const [visible, setVisible] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     function sync() {
@@ -30,14 +31,28 @@ export function AnkiConnectionHelpPortal() {
     connectButton?.click()
   }
 
+  async function copyOrigin() {
+    try {
+      await navigator.clipboard.writeText(window.location.origin)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setCopied(false)
+    }
+  }
+
   return createPortal(
     <div className="anki-connection-help">
       <AlertTriangle size={19} />
       <div>
-        <strong>AnkiConnect пока не запущен или браузер не может до него достучаться.</strong>
-        <p>Если дополнение только что установлено, полностью закрой Anki и открой заново. Надпись «Перезапустите Anki, чтобы применить изменения» означает, что AnkiConnect ещё не работает.</p>
-        <p>Если Anki уже перезапущен: открой «Инструменты → Дополнения → AnkiConnect → Проверить обновления». Затем попробуй ещё раз. Разрешение для <code>{window.location.origin}</code> AnkiConnect запросит сам.</p>
-        <button type="button" className="secondary-button" onClick={retry}><RefreshCw size={16} /> Проверить после перезапуска</button>
+        <strong>Anki открыт, но браузер пока не получил ответ от AnkiConnect.</strong>
+        <p>Это уже не похоже на проблему с перезапуском. Michi теперь пробует и <code>127.0.0.1:8765</code>, и <code>localhost:8765</code>, использует loopback-доступ Chrome и отправляет первый запрос без лишнего CORS-preflight.</p>
+        <p>Если ошибка останется, открой <b>Инструменты → Дополнения → AnkiConnect → Конфигурация</b>. В <code>webCorsOriginList</code> добавь <code>{window.location.origin}</code>. Если этот адрес есть в <code>ignoreOriginList</code>, удали его оттуда. Порт должен быть <code>8765</code>, адрес — <code>127.0.0.1</code>.</p>
+        <p>После сохранения конфигурации перезапусти только Anki. Это ручной запасной путь на случай, если Chrome не пропускает автоматический <code>requestPermission</code>.</p>
+        <div className="anki-help-actions">
+          <button type="button" className="secondary-button" onClick={retry}><RefreshCw size={16} /> Проверить снова</button>
+          <button type="button" className="secondary-button" onClick={() => void copyOrigin()}><Copy size={16} /> {copied ? 'Скопировано' : 'Скопировать адрес Michi'}</button>
+        </div>
       </div>
     </div>,
     target,
