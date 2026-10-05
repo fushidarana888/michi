@@ -1,0 +1,68 @@
+.weekly-floor-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+}
+
+.weekly-floor-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.weekly-floor-main h2 {
+  margin: 2px 0 8px;
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+}
+
+.weekly-floor-main p:last-child {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.weekly-floor-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  color: var(--accent);
+  background: rgba(168, 240, 208, 0.09);
+  border: 1px solid rgba(168, 240, 208, 0.16);
+}
+
+.weekly-floor-next {
+  min-width: 180px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+}
+
+.weekly-floor-next span,
+.weekly-floor-next small {
+  color: var(--muted);
+}
+
+.weekly-floor-next strong {
+  font-size: 1.4rem;
+}
+
+.savings-settings-grid {
+  margin: 16px 0;
+}
+
+@media (max-width: 760px) {
+  .weekly-floor-card {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-floor-next {
+    min-width: 0;
+  }
+}
